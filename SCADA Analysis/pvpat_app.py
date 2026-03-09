@@ -27,10 +27,15 @@ BG_PATH      = SCRIPT_DIR / "bg_solar.jpg"
 # ─────────────────────────────────────────────────────────────
 # FAVICON
 # ─────────────────────────────────────────────────────────────
-_favicon = Image.open(FAVICON_PATH) if FAVICON_PATH.exists() else "☀️"
+# Force favicon to square so browser tab doesn't stretch it
+if FAVICON_PATH.exists():
+    _fav = Image.open(FAVICON_PATH).convert("RGBA")
+    _fav = _fav.resize((64, 64), Image.LANCZOS)
+else:
+    _fav = "☀️"
 st.set_page_config(
     page_title="PVPAT Data Portal | 8p2 Advisory",
-    page_icon=_favicon,
+    page_icon=_fav,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -233,33 +238,31 @@ st.markdown(f"""
 
 
 # ─────────────────────────────────────────────────────────────
-# HEADER  (inside the white card, above form)
+# HEADER  — flex row: logo left, title right, perfectly aligned
 # ─────────────────────────────────────────────────────────────
-col_logo, col_title = st.columns([1, 6])
-with col_logo:
-    if logo_b64:
-        st.markdown(
-            f'<img src="data:image/png;base64,{logo_b64}" '
-            f'style="width:260px;max-width:100%;display:block;margin-top:1.1rem;" />',
-            unsafe_allow_html=True,
-        )
-
-with col_title:
-    st.markdown(
-        "<h2 style='margin:0.3rem 0 0.1rem 0;color:white;font-size:1.55rem'>"
-        "PVPAT — SCADA Data Submission Portal</h2>"
-        "<p style='margin:0;color:rgba(255,255,255,0.65);font-size:0.88rem'>"
-        "8p2 Advisory &nbsp;·&nbsp; A Dolfines Company</p>",
-        unsafe_allow_html=True,
-    )
-
-st.markdown(
-    "<p style='color:rgba(255,255,255,0.80);font-size:0.88rem;margin:0.6rem 0 0 0;max-width:750px'>"
-    "Please answer the setup questions below — the upload sections will adapt to your "
-    "site configuration automatically. Once submitted, our team will contact you to "
-    "confirm receipt and schedule the analysis.</p>",
-    unsafe_allow_html=True,
+_logo_img = (
+    f'<img src="data:image/png;base64,{logo_b64}" '
+    f'style="height:64px;width:auto;flex-shrink:0;" />'
+    if logo_b64 else ""
 )
+st.markdown(f"""
+<div style="display:flex;align-items:center;gap:2rem;margin-bottom:0.8rem;">
+  {_logo_img}
+  <div>
+    <div style="font-size:1.55rem;font-weight:700;color:white;line-height:1.2;">
+      PVPAT — SCADA Data Submission Portal
+    </div>
+    <div style="font-size:0.88rem;color:rgba(255,255,255,0.60);margin-top:0.2rem;">
+      8p2 Advisory &nbsp;·&nbsp; A Dolfines Company
+    </div>
+  </div>
+</div>
+<p style="color:rgba(255,255,255,0.80);font-size:0.88rem;margin:0 0 0.4rem 0;max-width:750px;">
+  Please answer the setup questions below — the upload sections will adapt to your
+  site configuration automatically. Once submitted, our team will contact you to
+  confirm receipt and schedule the analysis.
+</p>
+""", unsafe_allow_html=True)
 st.divider()
 
 
