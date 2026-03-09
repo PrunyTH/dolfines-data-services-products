@@ -12,6 +12,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+import msal
+import requests as _req
 from PIL import Image
 import streamlit as st
 
@@ -289,6 +291,39 @@ def _count(v):
     return len(v)
 
 
+# ─────────────────────────────────────────────────────────────
+# SHAREPOINT HELPERS
+# ─────────────────────────────────────────────────────────────
+def _sharepoint_session():
+    cfg = st.secrets["sharepoint"]
+    msal_app = msal.ConfidentialClientApplication(
+        cfg["client_id"],
+        authority=f"https://login.microsoftonline.com/{cfg['tenant_id']}",
+        client_credential=cfg["client_secret"],
+    )
+    tok = msal_app.acquire_token_for_client(
+        scopes=["https://graph.microsoft.com/.default"]
+    )
+    if "access_token" not in tok:
+        raise RuntimeError(tok.get("error_description", "SharePoint auth failed"))
+    token = tok["access_token"]
+    sr = _req.get(
+        "https://graph.microsoft.com/v1.0/sites/8p2france.sharepoint.com:/sites/Serveur",
+        headers={"Authorization": f"Bearer {token}"}, timeout=15,
+    )
+    sr.raise_for_status()
+    return token, sr.json()["id"]
+
+def _sp_put(token, site_id, sp_path, data):
+    url = (f"https://graph.microsoft.com/v1.0/sites/{site_id}"
+           f"/drive/root:/{sp_path}:/content")
+    r = _req.put(url,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/octet-stream"},
+        data=data, timeout=300)
+    r.raise_for_status()
+
+
 # ═════════════════════════════════════════════════════════════
 # STEP 1 — SETUP
 # ═════════════════════════════════════════════════════════════
@@ -490,69 +525,85 @@ with col_btn:
 if submit and not errors:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe      = lambda s: "".join(c if c.isalnum() or c in "-_" else "_" for c in s)
-    pkg_name  = f"{safe(client_name.strip())}_{timestamp}"
+    pkg_name  = f"PVPAT_{safe(client_name.strip())}_{timestamp}"
 
-    (SCRIPT_DIR / "submissions").mkdir(exist_ok=True)
-    pkg_dir = SCRIPT_DIR / "submissions" / pkg_name
-    pkg_dir.mkdir()
-
-    def _save(f, rel):
-        dest = pkg_dir / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(f.getbuffer())
-
-    with st.spinner("Packaging your data…"):
+    with st.spinner("Packaging and uploading your data…"):
         meta = {
-            "timestamp": timestamp,
+            "timestamp": timestamp, "portal": "pvpat",
             "client": client_name, "contact_name": contact_name,
             "contact_email": contact_email, "contract_ref": client_ref,
-            "notes": notes,
-            "inv_upload_mode": inv_upload_mode,
-            "data_years": data_years,
-            "sites": [],
+            "notes": notes, "inv_upload_mode": inv_upload_mode,
+            "data_years": data_years, "sites": [],
         }
 
-        for i, s in enumerate(site_data):
-            folder = safe(f"site_{i+1}_{s['name'] or f'site{i+1}'}")
-            sm = {k: s[k] for k in
-                  ("name","country","region","cod","n_inv","inv_kw",
-                   "inv_model","n_mod","mod_wp","mod_brand")}
-            sm["files"] = {"inverter": {}, "irradiance": [], "other": []}
+        buf     = io.BytesIO()
+        uploads = []  # (relative_path, bytes)
 
-            for grp, flist in s["inv_files"].items():
-                sm["files"]["inverter"][grp] = [f.name for f in flist]
-                for f in flist: _save(f, f"{folder}/inverter/{grp}/{f.name}")
-
-            for f in s["irr_files"]:
-                _save(f, f"{folder}/irradiance/{f.name}")
-                sm["files"]["irradiance"].append(f.name)
-
-            for f in s["other_files"]:
-                _save(f, f"{folder}/other/{f.name}")
-                sm["files"]["other"].append(f.name)
-
-            meta["sites"].append(sm)
-
-        (pkg_dir / "submission_metadata.json").write_text(
-            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-
-        buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for fp in pkg_dir.rglob("*"):
-                if fp.is_file():
-                    zf.write(fp, fp.relative_to(pkg_dir))
+            for i, s in enumerate(site_data):
+                folder = safe(f"site_{i+1}_{s['name'] or f'site{i+1}'}")
+                sm = {k: s[k] for k in
+                      ("name","country","region","cod","n_inv","inv_kw",
+                       "inv_model","n_mod","mod_wp","mod_brand")}
+                sm["files"] = {"inverter": {}, "irradiance": [], "other": []}
+
+                for grp, flist in s["inv_files"].items():
+                    sm["files"]["inverter"][grp] = [f.name for f in flist]
+                    for f in flist:
+                        fbytes = f.getbuffer().tobytes()
+                        rel    = f"{folder}/inverter/{grp}/{f.name}"
+                        zf.writestr(rel, fbytes)
+                        uploads.append((rel, fbytes))
+
+                for f in s["irr_files"]:
+                    fbytes = f.getbuffer().tobytes()
+                    rel    = f"{folder}/irradiance/{f.name}"
+                    zf.writestr(rel, fbytes)
+                    uploads.append((rel, fbytes))
+                    sm["files"]["irradiance"].append(f.name)
+
+                for f in s["other_files"]:
+                    fbytes = f.getbuffer().tobytes()
+                    rel    = f"{folder}/other/{f.name}"
+                    zf.writestr(rel, fbytes)
+                    uploads.append((rel, fbytes))
+                    sm["files"]["other"].append(f.name)
+
+                meta["sites"].append(sm)
+
+            meta_bytes = json.dumps(meta, indent=2, ensure_ascii=False).encode()
+            zf.writestr("submission_metadata.json", meta_bytes)
+            uploads.append(("submission_metadata.json", meta_bytes))
+
         buf.seek(0)
+
+        sp_ok  = False
+        sp_err = ""
+        if "sharepoint" in st.secrets:
+            try:
+                sp_tok, sp_sid = _sharepoint_session()
+                for rel, fbytes in uploads:
+                    _sp_put(sp_tok, sp_sid, f"Partage client/{pkg_name}/{rel}", fbytes)
+                sp_ok = True
+            except Exception as exc:
+                sp_err = str(exc)
 
     total = sum(_count(s["inv_files"]) + _count(s["irr_files"]) +
                 _count(s["other_files"]) for s in site_data)
 
-    st.success(f"""
-    ✅  **Thank you, {contact_name} — your submission has been received.**
+    if sp_ok:
+        st.success(f"""
+        ✅  **Thank you, {contact_name} — your submission has been received.**
 
-    **{int(n_sites)} site(s) · {total} files** packaged for **{client_name}**.
-    Our team will contact you at **{contact_email}** to confirm receipt
-    and schedule the analysis and report delivery.
-    """)
+        **{int(n_sites)} site(s) · {total} files** saved to SharePoint for **{client_name}**.
+        Our team will contact you at **{contact_email}** to confirm receipt
+        and schedule the analysis and report delivery.
+        """)
+    elif sp_err:
+        st.error(f"SharePoint upload failed — {sp_err}")
+        st.warning("Please download the ZIP below and send it to your 8p2 contact.")
+    else:
+        st.success(f"✅  Packaged {int(n_sites)} site(s) · {total} files for **{client_name}**.")
 
     st.download_button(
         "⬇️  Download your submission package (ZIP)",
