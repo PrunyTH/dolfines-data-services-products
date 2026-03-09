@@ -121,15 +121,19 @@ st.markdown(f"""
   }}
 
   /* ── Select / dropdown ── */
-  [data-baseweb="select"] > div,
-  [data-baseweb="select"] [data-baseweb="popover"] {{
-      background: rgba(0, 18, 55, 0.95) !important;
-      color: white !important;
+  [data-baseweb="select"] > div {{
+      background: rgba(0, 18, 55, 0.90) !important;
       border-color: rgba(255,255,255,0.25) !important;
   }}
+  [data-baseweb="select"] [data-baseweb="select-input"],
+  [data-baseweb="select"] [role="combobox"],
+  [data-baseweb="select"] div[aria-selected],
+  [data-baseweb="select"] span,
+  [data-baseweb="select"] div {{ color: white !important; }}
+  [data-baseweb="menu"], [data-baseweb="popover"] {{
+      background: rgba(0, 18, 55, 0.98) !important; }}
   [data-baseweb="menu"] li, [data-baseweb="option"] {{
-      color: white !important;
-      background: rgba(0, 18, 55, 0.95) !important;
+      color: white !important; background: rgba(0, 18, 55, 0.98) !important;
   }}
   [data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover {{
       background: rgba(240,120,32,0.35) !important;
@@ -137,12 +141,16 @@ st.markdown(f"""
 
   /* ── Multiselect tags ── */
   [data-baseweb="tag"] {{
-      background: rgba(240,120,32,0.60) !important;
-      color: white !important;
+      background: rgba(240,120,32,0.60) !important; color: white !important;
   }}
   [data-baseweb="tag"] span {{ color: white !important; }}
 
-  /* ── Number input spinners ── */
+  /* ── Number input ── */
+  [data-testid="stNumberInput"] input {{
+      background: rgba(0, 18, 55, 0.70) !important;
+      color: white !important;
+      border-color: rgba(255,255,255,0.25) !important;
+  }}
   [data-testid="stNumberInput"] button {{
       background: rgba(255,255,255,0.12) !important;
       color: white !important;
