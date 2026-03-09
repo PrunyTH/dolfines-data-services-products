@@ -20,19 +20,15 @@ import streamlit as st
 # ─────────────────────────────────────────────────────────────
 SCRIPT_DIR   = Path(__file__).parent
 LOGO_PATH    = SCRIPT_DIR / "8p2_logo_white.png"   # white version for dark background
-FAVICON_PATH = SCRIPT_DIR / "8p2_favicon.png"
+FAVICON_PATH = SCRIPT_DIR / "8p2_favicon_sq.jpg"
 BG_PATH      = SCRIPT_DIR / "bg_solar.jpg"
 
 
 # ─────────────────────────────────────────────────────────────
 # FAVICON
 # ─────────────────────────────────────────────────────────────
-# Force favicon to square so browser tab doesn't stretch it
-if FAVICON_PATH.exists():
-    _fav = Image.open(FAVICON_PATH).convert("RGBA")
-    _fav = _fav.resize((64, 64), Image.LANCZOS)
-else:
-    _fav = "☀️"
+# Already square (200×200) — just open directly
+_fav = Image.open(FAVICON_PATH) if FAVICON_PATH.exists() else "☀️"
 st.set_page_config(
     page_title="PVPAT Data Portal | 8p2 Advisory",
     page_icon=_fav,
