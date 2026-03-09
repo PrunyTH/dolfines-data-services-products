@@ -12,6 +12,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
 import streamlit as st
 
 # ─────────────────────────────────────────────────────────────
@@ -26,9 +27,10 @@ BG_PATH      = SCRIPT_DIR / "bg_solar.jpg"
 # ─────────────────────────────────────────────────────────────
 # FAVICON
 # ─────────────────────────────────────────────────────────────
+_favicon = Image.open(FAVICON_PATH) if FAVICON_PATH.exists() else "☀️"
 st.set_page_config(
     page_title="PVPAT Data Portal | 8p2 Advisory",
-    page_icon=str(FAVICON_PATH) if FAVICON_PATH.exists() else "☀️",
+    page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -49,13 +51,6 @@ else:
 # Encode logo and favicon as base64 for HTML injection (avoids Streamlit image expand button)
 logo_b64    = _b64(LOGO_PATH)    if LOGO_PATH.exists()    else ""
 favicon_b64 = _b64(FAVICON_PATH) if FAVICON_PATH.exists() else ""
-
-# Inject real favicon via <link> tag (overrides any stretching from page_icon)
-if favicon_b64:
-    st.markdown(
-        f'<link rel="shortcut icon" href="data:image/png;base64,{favicon_b64}">',
-        unsafe_allow_html=True,
-    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -245,7 +240,7 @@ with col_logo:
     if logo_b64:
         st.markdown(
             f'<img src="data:image/png;base64,{logo_b64}" '
-            f'style="width:260px;max-width:100%;display:block;margin-top:0.3rem;" />',
+            f'style="width:260px;max-width:100%;display:block;margin-top:1.1rem;" />',
             unsafe_allow_html=True,
         )
 
