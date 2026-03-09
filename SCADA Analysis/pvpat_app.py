@@ -52,6 +52,14 @@ else:
 # ─────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
+  /* ── Hide Streamlit's fixed top header so logo isn't clipped ── */
+  header[data-testid="stHeader"] {{
+      display: none !important;
+  }}
+  /* Remove the gap that was reserved for the header */
+  .main {{ padding-top: 0 !important; }}
+  [data-testid="stAppViewBlockContainer"] {{ padding-top: 1.5rem !important; }}
+
   /* ── Full-page background ── */
   .stApp {{
       background-image: linear-gradient(rgba(0,10,35,0.70), rgba(0,10,35,0.70)),
@@ -74,7 +82,7 @@ st.markdown(f"""
   }}
 
   /* ── All text white ── */
-  .stApp p, .stApp span, .stApp label, .stApp div,
+  .stApp, .stApp p, .stApp span, .stApp label, .stApp div,
   .stApp h1, .stApp h2, .stApp h3, .stApp h4,
   .stMarkdown, .stMarkdown p, .stMarkdown li,
   [data-testid="stText"], .stCaption,
@@ -83,22 +91,60 @@ st.markdown(f"""
   .stSelectbox label, .stMultiSelect label,
   .stNumberInput label, .stTextInput label,
   .stTextArea label, .stDateInput label,
-  .stRadio label, [data-testid="stCaptionContainer"] {{
+  .stRadio label, [data-testid="stCaptionContainer"],
+  [data-testid="stWidgetLabel"], [data-testid="stHelperText"],
+  [data-testid="InputInstructions"] {{
       color: white !important;
   }}
 
+  /* ── Placeholder text ── */
+  input::placeholder, textarea::placeholder {{
+      color: rgba(255,255,255,0.40) !important;
+      opacity: 1 !important;
+  }}
+
   /* ── Input fields: dark tinted ── */
-  input, textarea, [data-baseweb="input"] input,
+  input, textarea,
+  [data-baseweb="input"] input,
   [data-baseweb="textarea"] textarea {{
       background: rgba(255,255,255,0.10) !important;
       color: white !important;
       border-color: rgba(255,255,255,0.25) !important;
+      caret-color: white !important;
   }}
-  [data-baseweb="select"] > div {{
-      background: rgba(255,255,255,0.10) !important;
+
+  /* ── Select / dropdown ── */
+  [data-baseweb="select"] > div,
+  [data-baseweb="select"] [data-baseweb="popover"] {{
+      background: rgba(0, 18, 55, 0.95) !important;
       color: white !important;
       border-color: rgba(255,255,255,0.25) !important;
   }}
+  [data-baseweb="menu"] li, [data-baseweb="option"] {{
+      color: white !important;
+      background: rgba(0, 18, 55, 0.95) !important;
+  }}
+  [data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover {{
+      background: rgba(240,120,32,0.35) !important;
+  }}
+
+  /* ── Multiselect tags ── */
+  [data-baseweb="tag"] {{
+      background: rgba(240,120,32,0.60) !important;
+      color: white !important;
+  }}
+  [data-baseweb="tag"] span {{ color: white !important; }}
+
+  /* ── Number input spinners ── */
+  [data-testid="stNumberInput"] button {{
+      background: rgba(255,255,255,0.12) !important;
+      color: white !important;
+      border-color: rgba(255,255,255,0.20) !important;
+  }}
+
+  /* ── Date input ── */
+  [data-baseweb="datepicker"] input {{ color: white !important; }}
+  [data-testid="stDateInput"] input {{ color: white !important; }}
 
   /* ── Tab labels ── */
   [data-baseweb="tab"] button, [role="tab"] {{
@@ -161,6 +207,10 @@ st.markdown(f"""
       border: 1.5px dashed rgba(255,255,255,0.30);
       border-radius: 6px;
       background: rgba(255,255,255,0.06);
+  }}
+  [data-testid="stFileUploaderDropzoneInstructions"] span,
+  [data-testid="stFileUploaderDropzoneInstructions"] p {{
+      color: rgba(255,255,255,0.65) !important;
   }}
 
   /* ── Expander ── */
