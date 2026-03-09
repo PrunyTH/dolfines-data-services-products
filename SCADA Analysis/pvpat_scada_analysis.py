@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# TEMPLATE VERSION: 2026-03-09  |  Dolfines Design System v2.0
+# Redesigned: color palette, footer layout, DOLFINES_COLORS constant
 import sys, io, re
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 """
@@ -14,6 +16,11 @@ Output: PVPAT_SCADA_Analysis_Report.pdf
 
 import sys
 import os
+import json
+import argparse
+import hashlib
+import platform
+import subprocess
 import warnings
 from pathlib import Path
 from datetime import datetime
@@ -56,9 +63,13 @@ plt.rcParams.update({
 # ─────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────
-DATA_DIR  = Path(r"C:\Users\RichardMUSI\OneDrive - Dolfines\Bureau\PVPAT\00orig")
-OUT_DIR   = Path(r"C:\Users\RichardMUSI\OneDrive - Dolfines\Bureau\PVPAT")
-REPORT    = "PVPAT_SCADA_Analysis_Report.pdf"
+DEFAULT_DATA_DIR = Path(r"C:\Users\RichardMUSI\OneDrive - Dolfines\Bureau\AI\PVPAT\00orig")
+DEFAULT_OUT_DIR  = Path(r"C:\Users\RichardMUSI\OneDrive - Dolfines\Bureau\AI\PVPAT")
+DEFAULT_REPORT   = "PVPAT_SCADA_Analysis_Report.pdf"
+
+DATA_DIR = DEFAULT_DATA_DIR
+OUT_DIR  = DEFAULT_OUT_DIR
+REPORT   = DEFAULT_REPORT
 
 SITE_NAME        = "PVPAT Solar PV Farm"
 
@@ -93,26 +104,45 @@ LOGO_PATH        = DATA_DIR / '8p2 advisory white.png'
 SOLAR_FARM_IMAGE = DATA_DIR / 'solar_farm_2.jpg'   # Pexels free-to-use photo
 _LOGO_IMG = None   # lazy-loaded
 
+
+def configure_runtime_paths(data_dir: Path, out_dir: Path, report_name: str) -> None:
+    """Allow deterministic runtime overrides without editing source code."""
+    global DATA_DIR, OUT_DIR, REPORT, LOGO_PATH, SOLAR_FARM_IMAGE, _LOGO_IMG
+    DATA_DIR = data_dir
+    OUT_DIR = out_dir
+    REPORT = report_name
+    LOGO_PATH = DATA_DIR / '8p2 advisory white.png'
+    SOLAR_FARM_IMAGE = DATA_DIR / 'solar_farm_2.jpg'
+    _LOGO_IMG = None
+
 def get_logo():
     global _LOGO_IMG
     if _LOGO_IMG is None and LOGO_PATH.exists():
         _LOGO_IMG = plt.imread(str(LOGO_PATH))
     return _LOGO_IMG
 
-# Colour palette  (orange = 8.2 Advisory brand orange)
-C = dict(
-    primary   = '#1F4E79',
-    secondary = '#2E75B6',
-    accent    = '#00B0F0',
-    green     = '#70AD47',
-    red       = '#CC0000',
-    orange    = '#F0921E',   # 8.2 Advisory brand orange
-    yellow    = '#FFD966',
-    budget    = '#4472C4',
-    actual    = '#ED7D31',
-    light_bg  = '#EBF3FB',
-    dark_grey = '#333333',
+# ── Dolfines Design System — colour palette ──────────────────
+# All hex values are defined here; no magic colour strings elsewhere.
+DOLFINES_COLORS = dict(
+    primary   = '#003366',   # Dolfines navy (brand primary)
+    secondary = '#2E75B6',   # mid blue
+    accent    = '#F07820',   # 8.2 Advisory brand orange (accent)
+    green     = '#1A7A3C',   # on-target / positive signal
+    red       = '#CC0000',   # alert
+    orange    = '#F07820',   # alias for accent (warnings, bars)
+    yellow    = '#FFD966',   # secondary highlight
+    budget    = '#4472C4',   # chart budget series
+    actual    = '#ED7D31',   # chart actual series
+    light_bg  = '#F4F6F8',   # section backgrounds, KPI cells
+    dark_grey = '#2D2D2D',   # body text
+    muted     = '#6B7280',   # captions, secondary text
 )
+C = DOLFINES_COLORS   # short alias used throughout the file
+
+# ── Custom colourmap — muted blue-to-burgundy (low = #7B1D1D, high = #2563A8)
+import matplotlib.colors as _mcolors
+_avail_cmap = _mcolors.LinearSegmentedColormap.from_list(
+    'dolfines_avail', ['#7B1D1D', '#B45309', '#EAB308', '#2563A8'], N=256)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -977,15 +1007,18 @@ def _footer(fig, page_num, total=''):
                                    boxstyle='square,pad=0',
                                    facecolor=C['orange'], edgecolor='none',
                                    transform=fig.transFigure, zorder=10))
-    # Footer text sits in the lower half of the band, ~12 mm below orange line
+    # Footer text: Confidential left | page centre | date right
     pg = f'Page {page_num}' + (f' / {total}' if total else '')
     fig.text(0.02, 0.025,
-             f'{SITE_NAME}  |  SCADA Performance Analysis  |  '
-             f'{datetime.now().strftime("%d %b %Y")}',
+             'Confidential \u2014 8p2 Advisory',
              ha='left', va='center', fontsize=6.5, color='#555555',
              transform=fig.transFigure, zorder=11)
-    fig.text(0.98, 0.025, pg, ha='right', va='center',
-             fontsize=6.5, color='#555555',
+    fig.text(0.50, 0.025, pg,
+             ha='center', va='center', fontsize=6.5, color='#555555',
+             transform=fig.transFigure, zorder=11)
+    fig.text(0.98, 0.025,
+             datetime.now().strftime('%d %b %Y'),
+             ha='right', va='center', fontsize=6.5, color='#555555',
              transform=fig.transFigure, zorder=11)
 
 
@@ -999,7 +1032,7 @@ def _kpi_box(ax, value, label, target='', ok=True):
     # Very subtle card background
     ax.add_patch(FancyBboxPatch((0.04, 0.04), 0.92, 0.92,
                                 boxstyle='square,pad=0',
-                                facecolor='#F6F8FA', edgecolor='#E4E8EE',
+                                facecolor=C['light_bg'], edgecolor='#E4E8EE',
                                 linewidth=0.6,
                                 transform=ax.transAxes, clip_on=False))
     # Coloured top rule (status indicator)
@@ -1086,10 +1119,10 @@ def _page_insight(fig, rows, gs=None, has_rotated_labels=False, caption=None):
     BOX_BOT = 0.058
 
     SEV_CFG = {
-        'HIGH':   ('● HIGH', '#B71C1C', '#FDECEA'),
-        'MEDIUM': ('● MED',  '#BF6000', '#FFF3E0'),
-        'OK':     ('✔  OK',  '#1A6B35', '#E8F5EC'),
-        'INFO':   ('ℹ  INFO','#1F4E79', '#EEF3FA'),
+        'HIGH':   ('● HIGH', '#7B1D1D', '#FEF2F2'),   # deep burgundy, very light red bg
+        'MEDIUM': ('● MED',  '#92400E', '#FFFBEB'),   # muted amber, warm white bg
+        'OK':     ('✔  OK',  C['green'], '#F0FDF4'),  # brand green, pale green bg
+        'INFO':   ('ℹ  INFO', C['primary'], '#EFF6FF'), # navy, pale blue bg
     }
 
     def _rh(r):
@@ -1215,7 +1248,7 @@ def _page_insight(fig, rows, gs=None, has_rotated_labels=False, caption=None):
             al = _tw.wrap(r['action'], width=WRAP_A) or ['']
             fig.text(ACT_TX, text_top, '\n'.join(al),
                      ha='left', va='top', fontsize=LINE_PT - 0.8,
-                     color='#1F4E79', style='italic',
+                     color=C['primary'], style='italic',
                      transform=fig.transFigure, zorder=7, linespacing=1.32)
         y -= rh
 
@@ -1341,7 +1374,7 @@ def page_cover(pdf):
     plt.close(fig)
 
 
-def page_contents(pdf):
+def page_contents(pdf, include_weather=True):
     """Standalone table of contents (page 2)."""
     fig = plt.figure(figsize=(PAGE_W, PAGE_H))
     _header_bar(fig, 'TABLE OF CONTENTS')
@@ -1363,18 +1396,34 @@ def page_contents(pdf):
                'Sensor cross-checks, shadow masks and satellite comparison'),
         ('7',  'Site Performance Overview',
                'Monthly and annual PR, energy yield vs. budget'),
-        ('8',  'Inverter-level Performance',
+        ('8' if include_weather else '—',  'Weather Correlation',
+               'PR correlation with rainfall/temperature anomalies'),
+        ('9' if include_weather else '8',  'Inverter-level Performance',
                'Per-inverter PR ranking, outlier identification'),
-        ('9',  'Availability Analysis',
+        ('10' if include_weather else '9',  'Availability Analysis',
                'Technical availability per inverter and fleet-level trends'),
-        ('10', 'Energy Loss Waterfall',
+        ('11' if include_weather else '10', 'Energy Loss Waterfall',
                'Breakdown of losses from budget to actual generation'),
-        ('11–12', 'Reliability Analysis (MTTF)',
+        ('12–13' if include_weather else '11–12', 'Reliability Analysis (MTTF)',
                'Mean-time-to-failure, failure frequency by inverter, and detail table'),
-        ('13', 'Conclusions & Summary of Findings',
+        ('14' if include_weather else '13', 'Start/Stop Analysis',
+               'Inverter startup/shutdown signature and timing deviations'),
+        ('15' if include_weather else '14', 'Clipping Detection',
+               'Near-ceiling operation and clipping frequency by irradiance bin'),
+        ('16' if include_weather else '15', 'Curtailment Attribution',
+               'Best-effort separation of curtailment, clipping and technical effects'),
+        ('17' if include_weather else '16', 'Degradation Trend',
+               'Weather-normalized PR annual trend with confidence interval'),
+        ('18' if include_weather else '17', 'Inverter Peer Grouping',
+               'Clustered operational signatures for targeted O&M actions'),
+        ('19' if include_weather else '18', 'Event Timeline Overlay',
+               'Outage/weather timeline for root-cause traceability'),
+        ('20' if include_weather else '19', 'Conclusions & Summary of Findings',
                'Narrative summary of all findings and priority recommendations'),
-        ('14', 'Action Punchlist',
+        ('21' if include_weather else '20', 'Action Punchlist',
                'Prioritised O&M recommendations with recommended actions'),
+        ('22' if include_weather else '21', 'Data Limitations Annex',
+               'Data constraints, attribution limits and recommended SCADA exports'),
     ]
 
     # Section header row
@@ -1386,23 +1435,23 @@ def page_contents(pdf):
             transform=ax.transAxes, clip_on=False)
 
     y = 0.91
-    row_h = 0.074
+    row_h = 0.046
     for idx, (pg_num, title, desc) in enumerate(sections):
         bg = C['light_bg'] if idx % 2 == 0 else 'white'
-        ax.add_patch(plt.Rectangle((0, y - row_h + 0.01), 1, row_h - 0.005,
+        ax.add_patch(plt.Rectangle((0, y - row_h + 0.006), 1, row_h - 0.004,
                                     facecolor=bg, edgecolor='none',
                                     transform=ax.transAxes))
         # Orange left accent bar
-        ax.add_patch(plt.Rectangle((0, y - row_h + 0.01), 0.006, row_h - 0.005,
+        ax.add_patch(plt.Rectangle((0, y - row_h + 0.006), 0.006, row_h - 0.004,
                                     facecolor=C['orange'], edgecolor='none',
                                     transform=ax.transAxes))
-        mid_y = y - row_h / 2 + 0.005
+        mid_y = y - row_h / 2 + 0.003
         ax.text(0.058, mid_y, pg_num, ha='center', va='center',
-                fontsize=10, fontweight='bold', color=C['primary'])
-        ax.text(0.14, mid_y + 0.015, title, ha='left', va='center',
-                fontsize=9.5, fontweight='bold', color=C['primary'])
-        ax.text(0.14, mid_y - 0.018, desc, ha='left', va='center',
-                fontsize=7.5, color='#555555')
+                fontsize=8.5, fontweight='bold', color=C['primary'])
+        ax.text(0.14, mid_y + 0.010, title, ha='left', va='center',
+                fontsize=8.5, fontweight='bold', color=C['primary'])
+        ax.text(0.14, mid_y - 0.011, desc, ha='left', va='center',
+                fontsize=7.0, color='#555555')
         # Dotted leader line
         ax.plot([0.075, 0.115], [mid_y, mid_y], color='#CCCCCC',
                 linewidth=0.5, linestyle=':')
@@ -1632,7 +1681,7 @@ def page_executive_summary(pdf, pr_res, avail_res, wf, data_avail,
     top5_mwh = sum(i.get('mwh_loss', 0) for i in top5)
 
     fig.add_artist(FancyBboxPatch((0.03, 0.356), 0.94, 0.034,
-        boxstyle='square,pad=0', facecolor=C['orange'], edgecolor='none',
+        boxstyle='square,pad=0', facecolor=C['primary'], edgecolor='none',
         transform=fig.transFigure, zorder=5))
     fig.text(0.050, 0.373, 'TOP 5 RECOMMENDED ACTIONS  —  ranked by estimated MWh impact',
              ha='left', va='center', fontsize=9, fontweight='bold',
@@ -1649,8 +1698,8 @@ def page_executive_summary(pdf, pr_res, avail_res, wf, data_avail,
     for idx, item in enumerate(top5, 1):
         mwh = item.get('mwh_loss', 0)
         mwh_str = f'{mwh:.0f} MWh' if mwh >= 1 else '< 1 MWh'
-        finding = _tw.fill(item['issue'],  width=52)
-        action  = _tw.fill(item['action'], width=68)
+        finding = _tw.fill(item['issue'],  width=36)   # matched to rendered column width
+        action  = _tw.fill(item['action'], width=48)   # matched to rendered column width
         act_rows.append([str(idx), item['priority'], item['category'],
                          mwh_str, finding, action])
     tbl_act = ax_act.table(
@@ -1665,29 +1714,30 @@ def page_executive_summary(pdf, pr_res, avail_res, wf, data_avail,
         cell.set_facecolor(C['primary'])
         cell.get_text().set_color('white')
         cell.get_text().set_fontweight('bold')
-        cell.get_text().set_fontsize(8)
+        cell.get_text().set_fontsize(7.5)
     for ri, item in enumerate(top5):
         r = ri + 1
         pri   = item['priority']
-        p_col = '#CC2200' if pri == 'HIGH' else C['orange'] if pri == 'MEDIUM' else C['green']
-        p_bg  = '#FDECEA' if pri == 'HIGH' else '#FFF3E0' if pri == 'MEDIUM' else '#E8F5EC'
-        row_bg = '#F7F7F7' if ri % 2 == 0 else 'white'
+        # Muted priority colours — stay within the navy/amber/green theme
+        p_col = '#7B1D1D' if pri == 'HIGH' else '#92400E' if pri == 'MEDIUM' else C['green']
+        p_bg  = '#FEF2F2' if pri == 'HIGH' else '#FFFBEB' if pri == 'MEDIUM' else '#F0FDF4'
+        row_bg = C['light_bg'] if ri % 2 == 0 else 'white'
         for col in range(6):
             cell = tbl_act[(r, col)]
             cell.set_facecolor(p_bg if col == 1 else row_bg)
-            cell.get_text().set_fontsize(7.0)
+            cell.get_text().set_fontsize(6.5)
         tbl_act[(r, 1)].get_text().set_color(p_col)
         tbl_act[(r, 1)].get_text().set_fontweight('bold')
         mwh = item.get('mwh_loss', 0)
-        tbl_act[(r, 3)].get_text().set_color(
-            C['red'] if mwh > 100 else C['orange'] if mwh > 20 else '#444444')
+        mwh_col = '#7B1D1D' if mwh > 100 else '#92400E' if mwh > 20 else '#444444'
+        tbl_act[(r, 3)].get_text().set_color(mwh_col)
         tbl_act[(r, 3)].get_text().set_fontweight('bold')
 
-    # Dynamic per-row heights so multi-line cells don't overflow into the next row
-    _LINE_H_FRAC = 0.042   # axes fraction per text line at 7pt
-    _PAD_H_FRAC  = 0.012   # top+bottom padding inside each row
+    # Dynamic per-row heights — must be tall enough to avoid text bleed
+    _LINE_H_FRAC = 0.052   # axes fraction per text line at 6.5pt (increased from 0.042)
+    _PAD_H_FRAC  = 0.020   # generous top+bottom padding
     for col in range(6):
-        tbl_act[(0, col)].set_height(0.060)   # fixed header height
+        tbl_act[(0, col)].set_height(0.065)   # fixed header height
     for ri, row in enumerate(act_rows):
         max_ln = max(row[4].count('\n') + 1, row[5].count('\n') + 1, 1)
         row_h  = max_ln * _LINE_H_FRAC + _PAD_H_FRAC
@@ -1711,47 +1761,54 @@ def page_data_availability(pdf, data_avail, piv, punchlist, pg):
     _header_bar(fig, 'DATA AVAILABILITY ANALYSIS')
     _footer(fig, pg)
 
-    gs = GridSpec(3, 1, figure=fig, hspace=0.65,
+    gs = GridSpec(3, 1, figure=fig, hspace=0.42,
                   top=0.90, bottom=0.18, left=0.18, right=0.93)
+
+    # Muted theme-consistent traffic-light colours (no harsh primary red/orange)
+    _DA_GOOD  = '#2563A8'   # on-target: mid navy-blue (≥95%)
+    _DA_WARN  = '#B45309'   # below target: muted amber (90–94%)
+    _DA_BAD   = '#7B1D1D'   # well below: deep burgundy (<90%)
+    _DA_REF   = C['primary']  # reference line: same navy as headings
 
     # 1 - Summary bar chart
     ax1 = fig.add_subplot(gs[0])
     cats = ['Power Data (Overall)', 'Irradiance Data']
     vals = [data_avail['overall_power'], data_avail['irradiance']]
-    cols = [C['green'] if v >= 95 else C['orange'] if v >= 90 else C['red'] for v in vals]
-    bars = ax1.barh(cats, vals, color=cols, height=0.4, edgecolor='white')
-    ax1.axvline(95, color='red', ls='--', lw=1.2, label='95% target')
+    cols = [_DA_GOOD if v >= 95 else _DA_WARN if v >= 90 else _DA_BAD for v in vals]
+    bars = ax1.barh(cats, vals, color=cols, height=0.4, edgecolor='white', alpha=0.85)
+    ax1.axvline(95, color=_DA_REF, ls='--', lw=1.0, label='95% target')
     ax1.set_xlim(0, 108)
     ax1.set_xlabel('Availability (%)')
     ax1.set_title('Overall Data Availability', fontweight='bold', color=C['primary'])
     for b, v in zip(bars, vals):
         ax1.text(v + 0.5, b.get_y() + b.get_height()/2,
-                 f'{v:.1f}%', va='center', fontsize=10, fontweight='bold')
-    ax1.legend(fontsize=8); ax1.grid(axis='x', alpha=0.3)
+                 f'{v:.1f}%', va='center', fontsize=9, fontweight='bold',
+                 color=C['dark_grey'])
+    ax1.legend(fontsize=7); ax1.grid(axis='x', alpha=0.2)
 
     # 2 - Per-inverter data availability (natural sort by inverter name)
     ax2 = fig.add_subplot(gs[1])
     inv_items = sorted(data_avail['per_inverter'].items(), key=lambda x: _nat(x[0]))
     inv_n = [x[0] for x in inv_items]
     inv_v = [x[1] for x in inv_items]
-    cols2 = [C['green'] if v >= 95 else C['orange'] if v >= 90 else C['red'] for v in inv_v]
-    ax2.bar(range(len(inv_n)), inv_v, facecolor='white', edgecolor=cols2, linewidth=1.5, width=0.8)
-    ax2.axhline(95, color='red', ls='--', lw=1, label='95% target')
+    cols2 = [_DA_GOOD if v >= 95 else _DA_WARN if v >= 90 else _DA_BAD for v in inv_v]
+    ax2.bar(range(len(inv_n)), inv_v, color=cols2, alpha=0.75, edgecolor='white', width=0.8)
+    ax2.axhline(95, color=_DA_REF, ls='--', lw=1.0, label='95% target')
     ax2.set_xticks(range(len(inv_n)))
     ax2.set_xticklabels(inv_n, rotation=55, ha='right', fontsize=6.5)
     _da_ymin = min(80, min(inv_v) - 2) if inv_v else 0
     ax2.set_ylim(_da_ymin, 103); ax2.set_ylabel('Data Availability (%)')
     ax2.set_title('Per-Inverter Data Availability', fontweight='bold', color=C['primary'])
-    ax2.legend(fontsize=8); ax2.grid(axis='y', alpha=0.3)
+    ax2.legend(fontsize=7); ax2.grid(axis='y', alpha=0.2)
 
-    # 3 - Monthly completeness heatmap
+    # 3 - Monthly completeness heatmap — muted blue-to-burgundy palette
     ax3 = fig.add_subplot(gs[2])
     mc = pd.DataFrame(data_avail['monthly'])
     if len(mc) > 0:
         mc.index = mc.index.strftime('%Y-%m')
-        _mc_cols = sorted(mc.columns, key=_nat)   # natural sort: OND1.1, OND1.2 … not 1.1, 1.10
+        _mc_cols = sorted(mc.columns, key=_nat)
         mc = mc[_mc_cols]
-        im = ax3.imshow(mc.T.values, aspect='auto', cmap='RdYlGn', vmin=60, vmax=100)
+        im = ax3.imshow(mc.T.values, aspect='auto', cmap=_avail_cmap, vmin=60, vmax=100)
         ax3.set_xticks(range(len(mc.index)))
         ax3.set_xticklabels(mc.index, rotation=55, ha='right', fontsize=6)
         ax3.set_yticks(range(len(_mc_cols)))
@@ -1799,7 +1856,7 @@ def page_irradiance_coherence(pdf, irr_coh, irr, test_df, punchlist, pg):
     _footer(fig, pg)
 
     n = len(irr_coh)
-    gs = GridSpec(n * 2 + 1, 1, figure=fig, hspace=0.65,
+    gs = GridSpec(n * 2 + 1, 1, figure=fig, hspace=0.42,
                   top=0.90, bottom=0.18, left=0.10, right=0.85)
 
     row = 0
@@ -1833,12 +1890,12 @@ def page_irradiance_coherence(pdf, irr_coh, irr, test_df, punchlist, pg):
             # Right axis: monthly bias % (measured vs satellite)
             ax_b = ax_d.twinx()
             bias = (mo_m - mo_r) / mo_r.replace(0, np.nan) * 100
-            ax_b.plot(x, bias.values, color=C['red'], lw=1.2,
+            ax_b.plot(x, bias.values, color='#7B1D1D', lw=1.2,
                       marker='o', ms=3.5, label='Monthly bias (%)', zorder=5)
             ax_b.set_ylabel('Monthly bias\n(+= over-reading, −= under)', fontsize=6.5,
-                            color=C['red'])
-            ax_b.tick_params(axis='y', colors=C['red'], labelsize=7)
-            ax_b.spines['right'].set_color(C['red'])
+                            color='#7B1D1D')
+            ax_b.tick_params(axis='y', colors='#7B1D1D', labelsize=7)
+            ax_b.spines['right'].set_color('#7B1D1D')
             # Annotate each bias point with its value
             for xi, bv in zip(x, bias.values):
                 if not np.isnan(bv):
@@ -1961,12 +2018,12 @@ def page_performance_overview(pdf, pr_res, piv, cap_kw, punchlist, pg):
     ax2 = fig.add_subplot(gs[1, :])
     if len(monthly) > 0:
         pr_v = monthly['PR'].values
-        cprs = [C['green'] if v >= 75 else C['orange'] if v >= 65 else C['red']
+        cprs = ['#2563A8' if v >= 75 else '#B45309' if v >= 65 else '#7B1D1D'
                 for v in pr_v]
         ax2.bar(range(len(monthly)), pr_v, color=cprs, width=0.75, edgecolor='white')
-        ax2.axhline(75, color='green', ls='--', lw=1, label='75% target')
-        ax2.axhline(65, color='orange', ls=':', lw=1, label='65% alert')
-        ax2.axhline(100, color='purple', ls=':', lw=0.8, alpha=0.5, label='100% (physical max)')
+        ax2.axhline(75, color=C['primary'], ls='--', lw=1, label='75% target')
+        ax2.axhline(65, color=C['muted'], ls=':', lw=1, label='65% alert')
+        ax2.axhline(100, color=C['muted'], ls=':', lw=0.8, alpha=0.5, label='100% (physical max)')
         ax2.set_xticks(range(len(monthly)))
         ax2.set_xticklabels([m.strftime('%b\n%Y') for m in monthly.index], fontsize=6.5)
         ax2.set_ylim(0, 115); ax2.set_ylabel('PR (%)')
@@ -1975,7 +2032,7 @@ def page_performance_overview(pdf, pr_res, piv, cap_kw, punchlist, pg):
         for i, v in enumerate(pr_v):
             label = f'{v:.1f}' if v <= 100 else f'{v:.1f}*'
             ax2.text(i, v + 1, label, ha='center', va='bottom', fontsize=6,
-                     color='purple' if v > 100 else 'black')
+                     color=C['muted'] if v > 100 else 'black')
         # Annotate suspect months (PR > 100 %)
         suspect_i = [i for i, v in enumerate(pr_v) if v > 100]
         if suspect_i:
@@ -1984,8 +2041,8 @@ def page_performance_overview(pdf, pr_res, piv, cap_kw, punchlist, pg):
                 '  making the GHI reference artificially low that month.',
                 xy=(suspect_i[0], pr_v[suspect_i[0]]),
                 xytext=(suspect_i[0] + 0.5, 108),
-                fontsize=5.5, color='purple', style='italic',
-                arrowprops=dict(arrowstyle='->', color='purple', lw=0.7))
+                fontsize=5.5, color=C['muted'], style='italic',
+                arrowprops=dict(arrowstyle='->', color=C['muted'], lw=0.7))
 
     # 3 - Annual table (note partial years)
     ax3 = fig.add_subplot(gs[2, :])
@@ -2022,7 +2079,7 @@ def page_performance_overview(pdf, pr_res, piv, cap_kw, punchlist, pg):
     ax4.plot(daily_sy.index, daily_sy.values, color=C['primary'], lw=0.7)
     # Rolling 30-day mean
     roll = daily_sy.rolling(30, center=True).mean()
-    ax4.plot(roll.index, roll.values, color=C['red'], lw=1.5,
+    ax4.plot(roll.index, roll.values, color='#7B1D1D', lw=1.5,
              label='30-day rolling mean')
     ax4.set_ylabel('Specific Yield (kWh/kWp/day)')
     ax4.set_title('Daily Specific Yield & 30-day Rolling Mean',
@@ -2096,11 +2153,11 @@ def page_inverter_performance(pdf, pr_res, avail_res, inv_caps, punchlist, pg):
         elif v < fleet_mean - fleet_std:   cprs.append(C['orange'])
         else:                              cprs.append(C['green'])
     ax1.bar(x, pr_vals, facecolor='white', edgecolor=cprs, linewidth=1.5, width=0.8)
-    ax1.axhline(fleet_mean, color='blue', ls='--', lw=1.2,
+    ax1.axhline(fleet_mean, color=C['primary'], ls='--', lw=1.2,
                 label=f'Fleet mean {fleet_mean:.1f}%')
-    ax1.axhline(fleet_mean - fleet_std, color='orange', ls=':',
+    ax1.axhline(fleet_mean - fleet_std, color=C['muted'], ls=':',
                 lw=1, label=f'−1σ ({fleet_mean-fleet_std:.1f}%)')
-    ax1.axhline(fleet_mean - 2*fleet_std, color='red', ls=':',
+    ax1.axhline(fleet_mean - 2*fleet_std, color='#7B1D1D', ls=':',
                 lw=1, label=f'−2σ ({fleet_mean-2*fleet_std:.1f}%)')
     ax1.set_xticks(x); ax1.set_xticklabels(inv_list, rotation=50, ha='right', fontsize=6.5)
     ax1.set_ylabel('PR (%)'); ax1.set_ylim(0, min(fleet_mean * 1.3, 110))
@@ -2111,7 +2168,7 @@ def page_inverter_performance(pdf, pr_res, avail_res, inv_caps, punchlist, pg):
     ax2 = fig.add_subplot(gs[1])
     cav = [C['green'] if v >= 95 else C['orange'] if v >= 90 else C['red'] for v in av_vals]
     ax2.bar(x, av_vals, facecolor='white', edgecolor=cav, linewidth=1.5, width=0.8)
-    ax2.axhline(95, color='red', ls='--', lw=1.2, label='95% target')
+    ax2.axhline(95, color=C['primary'], ls='--', lw=1.0, label='95% target')
     ax2.set_xticks(x); ax2.set_xticklabels(inv_list, rotation=50, ha='right', fontsize=6.5)
     _av_ymin = min(80, min(av_vals) - 2) if av_vals else 0
     ax2.set_ylim(_av_ymin, 103); ax2.set_ylabel('Availability (%)')
@@ -2120,14 +2177,14 @@ def page_inverter_performance(pdf, pr_res, avail_res, inv_caps, punchlist, pg):
 
     # 3 - PR vs Availability scatter
     ax3 = fig.add_subplot(gs[2])
-    sc = ax3.scatter(av_vals, pr_vals, c=pr_vals, cmap='RdYlGn',
+    sc = ax3.scatter(av_vals, pr_vals, c=pr_vals, cmap=_avail_cmap,
                      vmin=max(fleet_mean - 3*fleet_std, 0), vmax=fleet_mean + fleet_std,
                      s=60, zorder=5, edgecolors='k', lw=0.4)
     for i, inv in enumerate(inv_list):
         ax3.annotate(inv, (av_vals[i], pr_vals[i]),
                      textcoords='offset points', xytext=(4, 2), fontsize=5.5)
-    ax3.axvline(95, color='red', ls='--', lw=1, alpha=0.6, label='95% avail target')
-    ax3.axhline(fleet_mean, color='blue', ls='--', lw=1, alpha=0.6, label='Fleet PR mean')
+    ax3.axvline(95, color=C['primary'], ls='--', lw=1.0, alpha=0.7, label='95% avail target')
+    ax3.axhline(fleet_mean, color=C['primary'], ls='--', lw=1, alpha=0.6, label='Fleet PR mean')
     plt.colorbar(sc, ax=ax3, label='', shrink=0.7, fraction=0.025, pad=0.01)
     ax3.set_xlabel('Availability (%)'); ax3.set_ylabel('PR (%)')
     ax3.set_title('PR vs Availability -- Inverter Comparison',
@@ -2184,7 +2241,7 @@ def page_availability(pdf, avail_res, piv, irr, punchlist, pg):
                 for v in site_monthly.values]
         ax1.bar(range(len(site_monthly)), site_monthly.values,
                 facecolor='white', edgecolor=cols, linewidth=1.5, width=0.75)
-        ax1.axhline(95, color='red', ls='--', lw=1, label='95% target')
+        ax1.axhline(95, color=C['primary'], ls='--', lw=1.0, label='95% target')
         ax1.set_xticks(range(len(site_monthly)))
         ax1.set_xticklabels([str(d.strftime('%b\n%Y'))
                               if hasattr(d, 'strftime') else str(d)
@@ -2202,7 +2259,7 @@ def page_availability(pdf, avail_res, piv, irr, punchlist, pg):
     if pim_df is not None and not pim_df.empty:
         cols_sorted_av = sorted(pim_df.columns, key=_nat)
         pim_mat = pim_df[cols_sorted_av].T.values  # shape: n_inv × n_months
-        im2 = ax2.imshow(pim_mat, aspect='auto', cmap='RdYlGn', vmin=70, vmax=100,
+        im2 = ax2.imshow(pim_mat, aspect='auto', cmap=_avail_cmap, vmin=70, vmax=100,
                          interpolation='nearest')
         ax2.set_yticks(range(len(cols_sorted_av)))
         ax2.set_yticklabels(cols_sorted_av, fontsize=5.5)
@@ -2305,15 +2362,15 @@ def page_waterfall(pdf, wf, pr_res, avail_res, punchlist, pg):
 
     add_bar('Budget\n(Theoretical)', wf['budget'],            C['budget'],    is_abs=True)
     if abs(wf['weather_corr']) > 0.1:
-        col_w = C['green'] if wf['weather_corr'] >= 0 else C['red']
+        col_w = '#2563A8' if wf['weather_corr'] >= 0 else '#7B1D1D'
         add_bar('Weather\nCorrection', wf['weather_corr'], col_w)
     add_bar('Weather-\nCorrected',    wf['weather_corrected'], C['secondary'], is_abs=True)
     if abs(wf['avail_loss']) > 0.1:
-        add_bar('Availability\nLoss',    wf['avail_loss'],     C['red'])
+        add_bar('Availability\nLoss',    wf['avail_loss'],     '#7B1D1D')
     if abs(wf['technical_loss']) > 0.1:
-        add_bar('Technical\nLoss',       wf['technical_loss'], C['orange'])
+        add_bar('Technical\nLoss',       wf['technical_loss'], '#B45309')
     if abs(wf['residual']) > 0.1:
-        col_r = C['green'] if wf['residual'] >= 0 else C['red']
+        col_r = '#2563A8' if wf['residual'] >= 0 else '#7B1D1D'
         add_bar('Residual\n(Over/Under)', wf['residual'],      col_r)
     add_bar('Actual\nProduction',     wf['actual'],            C['actual'],    is_abs=True)
 
@@ -2345,8 +2402,8 @@ def page_waterfall(pdf, wf, pr_res, avail_res, punchlist, pg):
 
     # Legend — simplified: green outline = Gain, red outline = Loss
     lp = [
-        mpatches.Patch(facecolor='white', edgecolor=C['green'], linewidth=2, label='Gain'),
-        mpatches.Patch(facecolor='white', edgecolor=C['red'],   linewidth=2, label='Loss'),
+        mpatches.Patch(facecolor='white', edgecolor='#2563A8', linewidth=2, label='Gain'),
+        mpatches.Patch(facecolor='white', edgecolor='#7B1D1D', linewidth=2, label='Loss'),
     ]
     ax1.legend(handles=lp, fontsize=8, loc='upper right')
 
@@ -2361,7 +2418,7 @@ def page_waterfall(pdf, wf, pr_res, avail_res, punchlist, pg):
                             avail_res['mean'])
         m_avail_loss = (m_budget_mwh * (1.0 - m_avail_pct / 100)).clip(lower=0)
         # Colour by monthly availability
-        m_cols = [C['red'] if av < 90 else C['orange'] if av < 95 else C['green']
+        m_cols = ['#7B1D1D' if av < 90 else '#B45309' if av < 95 else '#2563A8'
                   for av in m_avail_pct.values]
         xm = range(len(m_avail_loss))
         ax2.bar(xm, m_avail_loss.values, facecolor='white', edgecolor=m_cols,
@@ -2482,7 +2539,7 @@ def page_mttf(pdf, mttf_res, punchlist, pg):
           for n in n_fail]
     ax1.bar(x, n_fail, facecolor='white', edgecolor=cn, linewidth=1.5, width=0.8)
     mn = np.mean(n_fail)
-    ax1.axhline(mn, color='blue', ls='--', lw=1.2, label=f'Mean: {mn:.0f}')
+    ax1.axhline(mn, color=C['primary'], ls='--', lw=1.2, label=f'Mean: {mn:.0f}')
     ax1.set_xticks(x)
     ax1.set_xticklabels(inv_list, rotation=50, ha='right', fontsize=6.5)
     ax1.set_ylabel('Number of fault events')
@@ -2496,7 +2553,7 @@ def page_mttf(pdf, mttf_res, punchlist, pg):
     cm = [C['green'] if v >= 90 else C['orange'] if v >= 30 else C['red']
           for v in mttf_d]
     ax2.bar(x, mttf_d, facecolor='white', edgecolor=cm, linewidth=1.5, width=0.8)
-    ax2.axhline(90, color='green', ls='--', lw=1,
+    ax2.axhline(90, color=C['primary'], ls='--', lw=1,
                 label='90-day target (IEA PVPS / NREL O&M benchmark)')
     ax2.set_xticks(x)
     ax2.set_xticklabels(inv_list, rotation=50, ha='right', fontsize=6.5)
@@ -2666,8 +2723,8 @@ def page_weather_correlation(pdf, pr_res, weather_data, pg):
                for v in pr_vals]
     ax1.bar(range(len(months)), pr_vals, facecolor='white', edgecolor=pr_cols,
             linewidth=1.5, width=0.65, label='Monthly PR')
-    ax1.axhline(75, color='green', ls='--', lw=0.9, label='75% target', alpha=0.7)
-    ax1.axhline(65, color='red',   ls='--', lw=0.9, label='65% alert',  alpha=0.7)
+    ax1.axhline(75, color=C['primary'], ls='--', lw=0.9, label='75% target', alpha=0.7)
+    ax1.axhline(65, color=C['muted'], ls='--', lw=0.9, label='65% alert', alpha=0.7)
     ax1.set_xticks(range(len(months)))
     ax1.set_xticklabels([d.strftime('%b\n%y') for d in months], fontsize=6.5)
     ax1.set_ylabel('PR (%)')
@@ -2685,10 +2742,10 @@ def page_weather_correlation(pdf, pr_res, weather_data, pg):
     ax1c = ax1.twinx()
     ax1c.spines['right'].set_position(('outward', 55))
     m_temp = w_tmax.resample('ME').mean().reindex(months)
-    ax1c.plot(range(len(months)), m_temp.values, 'r-o', ms=4, lw=1.2,
-              label='Mean max T (°C)')
-    ax1c.set_ylabel('Mean max temperature (°C)', color='red', fontsize=8)
-    ax1c.tick_params(axis='y', colors='red')
+    ax1c.plot(range(len(months)), m_temp.values, color='#7B1D1D', marker='o',
+              ms=4, lw=1.2, label='Mean max T (°C)')
+    ax1c.set_ylabel('Mean max temperature (°C)', color='#7B1D1D', fontsize=8)
+    ax1c.tick_params(axis='y', colors='#7B1D1D')
 
     # Combined legend
     lines1, lbs1 = ax1.get_legend_handles_labels()
@@ -2716,7 +2773,7 @@ def page_weather_correlation(pdf, pr_res, weather_data, pg):
         if len(valid) > 0:
             scatter_c = valid['tmax'].fillna(20)
             sc = ax2.scatter(valid.index, valid['PR'], c=scatter_c,
-                             cmap='RdYlGn_r', vmin=10, vmax=40, s=4, alpha=0.6)
+                             cmap='coolwarm', vmin=10, vmax=40, s=4, alpha=0.6)
             plt.colorbar(sc, ax=ax2, label='Max temperature (°C)',
                          fraction=0.02, pad=0.01, shrink=0.8)
             # Mark heavy rain days (≥10mm)
@@ -2726,7 +2783,7 @@ def page_weather_correlation(pdf, pr_res, weather_data, pg):
                             marker='v', color='steelblue', s=18, alpha=0.7,
                             zorder=5, label='Rain ≥10mm')
                 ax2.legend(fontsize=7)
-            ax2.axhline(75, color='green', ls='--', lw=0.9, alpha=0.7)
+            ax2.axhline(75, color=C['primary'], ls='--', lw=0.9, alpha=0.7)
             ax2.set_ylabel('Daily PR (%)'); ax2.grid(alpha=0.2)
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
             ax2.set_title('Daily PR coloured by max temperature — red = hot day (thermal derating risk)',
@@ -2824,49 +2881,470 @@ def page_start_stop(pdf, start_stop_df, pg):
                   fontweight='bold', color=C['primary'])
     ax2.legend(fontsize=7); ax2.grid(axis='y', alpha=0.3)
 
-    # Insight rows
-    n_late_start = sum(1 for v in start_dev if v > threshold)
-    n_early_stop = sum(1 for v in stop_dev  if v < -threshold)
+    # Insight rows — flag both >15 min (HIGH) and >8 min (MEDIUM) deviations in all directions
+    orange_th = 8.0
+    n_late_start  = sum(1 for v in start_dev if v > threshold)
+    n_early_start = sum(1 for v in start_dev if v < -threshold)
+    n_early_stop  = sum(1 for v in stop_dev  if v < -threshold)
+    n_late_stop   = sum(1 for v in stop_dev  if v > threshold)
+    n_orange_start = sum(1 for v in start_dev if orange_th < abs(v) <= threshold)
+    n_orange_stop  = sum(1 for v in stop_dev  if orange_th < abs(v) <= threshold)
+
     _ss_rows = []
     if n_late_start > 0:
         late_list = ', '.join(inv_list[i] for i, v in enumerate(start_dev) if v > threshold)
-        _ss_rows.append({
-            'sev': 'MEDIUM',
+        _ss_rows.append({'sev': 'MEDIUM',
             'finding': f'{n_late_start} inverter(s) start >{threshold:.0f} min later than fleet mean: {late_list}',
-            'action': 'Check Sungrow minimum start irradiance and Vdc_min settings; compare firmware config across inverters.',
-        })
+            'action': 'Check Sungrow minimum start irradiance and Vdc_min settings; compare firmware config across inverters.'})
+    if n_early_start > 0:
+        early_s_list = ', '.join(inv_list[i] for i, v in enumerate(start_dev) if v < -threshold)
+        _ss_rows.append({'sev': 'MEDIUM',
+            'finding': f'{n_early_start} inverter(s) start >{threshold:.0f} min earlier than fleet mean: {early_s_list}',
+            'action': 'Earlier-than-fleet start may indicate higher DC open-circuit voltage or lower startup threshold — verify inverter config.'})
     if n_early_stop > 0:
         early_list = ', '.join(inv_list[i] for i, v in enumerate(stop_dev) if v < -threshold)
-        _ss_rows.append({
-            'sev': 'MEDIUM',
+        _ss_rows.append({'sev': 'MEDIUM',
             'finding': f'{n_early_stop} inverter(s) stop >{threshold:.0f} min earlier than fleet mean: {early_list}',
-            'action': 'Check DC under-voltage protection threshold; inspect string fuses and DC cabling for voltage drop.',
-        })
-    _ss_rows.append({
-        'sev': 'INFO',
+            'action': 'Check DC under-voltage protection threshold; inspect string fuses and DC cabling for voltage drop.'})
+    if n_late_stop > 0:
+        late_s_list = ', '.join(inv_list[i] for i, v in enumerate(stop_dev) if v > threshold)
+        _ss_rows.append({'sev': 'MEDIUM',
+            'finding': f'{n_late_stop} inverter(s) stop >{threshold:.0f} min later than fleet mean: {late_s_list}',
+            'action': 'Late stop may indicate inverter operating on residual irradiance or elevated shutdown threshold — review Vdc_min settings.'})
+    if n_orange_start > 0 or n_orange_stop > 0:
+        orange_s = ', '.join(inv_list[i] for i, v in enumerate(start_dev) if orange_th < abs(v) <= threshold)
+        orange_e = ', '.join(inv_list[i] for i, v in enumerate(stop_dev)  if orange_th < abs(v) <= threshold)
+        combined = ', '.join(filter(None, [orange_s, orange_e]))
+        _ss_rows.append({'sev': 'MEDIUM',
+            'finding': f'Inverter(s) with 8–15 min start/stop deviation (amber zone): {combined}',
+            'action': 'Monitor these inverters; if deviation is consistent across seasons, a configuration audit is recommended.'})
+    _ss_rows.append({'sev': 'INFO',
         'finding': f'Fleet mean start: {fs_hm}  |  Fleet mean stop: {fe_hm}. '
                    'Deviations >15 min indicate non-uniform MPPT start/stop threshold settings or DC side issues.',
-        'action': 'Only days with >2 kWh/m² daily irradiation are included in the average to exclude overcast days.',
-    })
-    _ss_max_late  = max((abs(v) for v in start_dev if v > threshold), default=0)
-    _ss_max_early = max((abs(v) for v in stop_dev  if v < -threshold), default=0)
-    _ss_caption   = (
+        'action': 'Only days with >2 kWh/m² daily irradiation are included to exclude overcast days.'})
+
+    # Unique set of affected inverters (an inverter flagged for both start AND stop counts once)
+    _flagged_red = set(
+        inv_list[i] for i, v in enumerate(start_dev) if abs(v) > threshold
+    ) | set(
+        inv_list[i] for i, v in enumerate(stop_dev)  if abs(v) > threshold
+    )
+    _flagged_orange = set(
+        inv_list[i] for i, v in enumerate(start_dev) if orange_th < abs(v) <= threshold
+    ) | set(
+        inv_list[i] for i, v in enumerate(stop_dev)  if orange_th < abs(v) <= threshold
+    ) - _flagged_red   # only orange if not already red
+
+    _n_red    = len(_flagged_red)
+    _n_orange = len(_flagged_orange)
+
+    _ss_max_dev = max(
+        (abs(v) for v in start_dev + stop_dev if abs(v) > threshold), default=0)
+
+    _ss_caption = (
         f"Analysis: Fleet mean start {fs_hm}, mean stop {fe_hm}. "
-        + (f"{n_late_start} inverter(s) start >{threshold:.0f} min late (max deviation: {_ss_max_late:.0f} min). "
-           "A 15-min late start on a 250 kW inverter during peak summer irradiance costs approximately 60 kWh/day — "
-           "multiplied across all late starters and all days, this is a material recoverable loss. "
-           "Root cause is typically a high minimum-irradiance startup threshold or elevated Vdc_min setting in the inverter configuration. "
-           if n_late_start > 0 else "No inverters start systematically late. ")
-        + (f"{n_early_stop} inverter(s) stop >{threshold:.0f} min early (max: {_ss_max_early:.0f} min). "
-           "Early stops often indicate a low DC under-voltage cutoff triggering before string voltage stabilises at dusk — "
-           "inspect Vdc_min settings and measure string open-circuit voltage at end-of-day to rule out DC wiring voltage drop. "
-           if n_early_stop > 0 else "No inverters stop systematically early. ")
-        + ("Non-uniform start/stop behaviour across the fleet suggests different firmware configurations — "
-           "a configuration audit comparing each inverter\u2019s startup parameters against the OEM-recommended values is warranted."
-           if n_late_start > 0 or n_early_stop > 0 else "")
+        + (f"{_n_red} unique inverter(s) have start or stop deviations >{threshold:.0f} min "
+           f"(max: {_ss_max_dev:.0f} min): {', '.join(sorted(_flagged_red, key=_nat))}. "
+           "Note: an inverter affected in both morning and evening is counted once. "
+           "Root causes include non-uniform MPPT startup thresholds, elevated Vdc_min settings, "
+           "or DC under-voltage cutoff issues — a configuration audit is warranted. "
+           if _n_red > 0 else "No inverters deviate >15 min on start or stop time. ")
+        + (f"Additionally {_n_orange} inverter(s) show 8–15 min amber deviations requiring monitoring: "
+           f"{', '.join(sorted(_flagged_orange, key=_nat))}. "
+           if _n_orange > 0 else "")
     )
     _page_insight(fig, _ss_rows, gs=gs, has_rotated_labels=True, caption=_ss_caption)
 
+    pdf.savefig(fig, dpi=150)
+    plt.close(fig)
+
+
+def page_clipping_detection(pdf, piv, irr, cap_kw, pg):
+    """Clipping diagnostics: near-ceiling operation and frequency by irradiance bin."""
+    fig = plt.figure(figsize=(PAGE_W, PAGE_H))
+    _header_bar(fig, 'CLIPPING DETECTION', SITE_NAME)
+    _footer(fig, pg)
+
+    gs = GridSpec(2, 2, figure=fig, hspace=0.40, wspace=0.28,
+                  top=0.90, bottom=0.27, left=0.08, right=0.96)
+
+    site_pwr = piv.sum(axis=1, min_count=1)
+    ghi_s = irr.set_index('ts')['GHI'].reindex(site_pwr.index) if len(irr) else pd.Series(np.nan, index=site_pwr.index)
+    day = ghi_s > IRR_THRESHOLD
+    valid = day & site_pwr.notna() & ghi_s.notna()
+
+    near_site = valid & (site_pwr >= 0.97 * cap_kw)
+    near_site_pct = 100.0 * near_site.sum() / max(valid.sum(), 1)
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    pw_pct = (site_pwr[valid] / max(cap_kw, 1) * 100).clip(0, 120)
+    ax1.hist(pw_pct, bins=np.arange(0, 121, 5), color=C['secondary'], edgecolor='white')
+    ax1.axvline(97, color='#7B1D1D', linestyle='--', linewidth=1.2, label='Near-clipping threshold (97%)')
+    ax1.set_xlabel('Site Power (% of AC capacity)')
+    ax1.set_ylabel('10-min intervals')
+    ax1.set_title('Power Distribution During Daytime', fontweight='bold', color=C['primary'])
+    ax1.grid(alpha=0.25)
+    ax1.legend(fontsize=7)
+
+    ax2 = fig.add_subplot(gs[0, 1])
+    edges = np.array([200, 400, 600, 800, 1000, 1300])
+    labels = ['200-400', '400-600', '600-800', '800-1000', '>=1000']
+    fr = []
+    for i in range(len(labels)):
+        lo = edges[i]
+        hi = edges[i + 1]
+        if i < len(labels) - 1:
+            m = valid & (ghi_s >= lo) & (ghi_s < hi)
+        else:
+            m = valid & (ghi_s >= 1000)
+        fr.append(100.0 * (near_site & m).sum() / max(m.sum(), 1))
+    ax2.bar(labels, fr, color='#B45309', edgecolor='white')
+    ax2.set_ylim(0, max(max(fr) * 1.25, 5))
+    ax2.set_ylabel('Near-clipping frequency (%)')
+    ax2.set_xlabel('Irradiance bin (W/m²)')
+    ax2.set_title('Near-clipping Frequency by Irradiance', fontweight='bold', color=C['primary'])
+    ax2.grid(axis='y', alpha=0.25)
+
+    ax3 = fig.add_subplot(gs[1, :])
+    inv_clip = {}
+    for col in piv.columns:
+        p = piv[col]
+        v = day & p.notna()
+        near = v & (p >= 0.97 * INV_AC_KW)
+        inv_clip[col] = 100.0 * near.sum() / max(v.sum(), 1)
+    top = sorted(inv_clip.items(), key=lambda x: x[1], reverse=True)[:12]
+    invs = [i for i, _ in top]
+    vals = [v for _, v in top]
+    ax3.bar(invs, vals, color=C['secondary'], edgecolor='white')
+    ax3.set_ylabel('Near-clipping frequency (%)')
+    ax3.set_title('Top Inverters by Near-clipping Occurrence', fontweight='bold', color=C['primary'])
+    ax3.grid(axis='y', alpha=0.25)
+    ax3.tick_params(axis='x', labelsize=7)
+    plt.setp(ax3.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
+
+    rows = [
+        {
+            'sev': 'INFO',
+            'finding': f'Site near-clipping intervals: {near_site.sum():,} / {valid.sum():,} daytime records ({near_site_pct:.1f}%).',
+            'action': 'If high, verify whether inverter loading ratio and AC export limits are expected by design.',
+        },
+        {
+            'sev': 'INFO',
+            'finding': 'Near-clipping uses a 97% AC threshold; this is an operational indicator, not proof of hard clipping.',
+            'action': 'Confirm with high-resolution AC export meter and inverter setpoint/alarm channels.',
+        },
+    ]
+    _page_insight(fig, rows, gs=gs, has_rotated_labels=True, caption='Analysis: this page quantifies how often power operates near the AC ceiling and where clipping risk is concentrated.')
+    pdf.savefig(fig, dpi=150)
+    plt.close(fig)
+
+
+def _load_curtailment_proxy_data():
+    """Best-effort loader for curtailment/export-limit flags from optional CSV files."""
+    keys = ('curtail', 'setpoint', 'export', 'limit', 'dispatch')
+    candidates = [p for p in DATA_DIR.glob('*.csv') if any(k in p.name.lower() for k in keys)]
+    for fp in candidates:
+        try:
+            df = pd.read_csv(fp, sep=';', low_memory=False)
+            if df.empty:
+                continue
+            cols = {c.lower().strip(): c for c in df.columns}
+            tcol = None
+            for k in ('time_utc', 'time_udt', 'timestamp', 'datetime', 'time', 'ts'):
+                if k in cols:
+                    tcol = cols[k]
+                    break
+            if tcol is None:
+                continue
+            out = pd.DataFrame()
+            out['ts'] = pd.to_datetime(df[tcol], errors='coerce', dayfirst=True)
+            for c in df.columns:
+                lc = c.lower()
+                if any(k in lc for k in keys):
+                    out[c] = pd.to_numeric(df[c], errors='coerce')
+            out = out.dropna(subset=['ts']).drop_duplicates(subset=['ts']).set_index('ts').sort_index()
+            if out.shape[1] > 0:
+                return fp.name, out
+        except Exception:
+            continue
+    return None, None
+
+
+def page_curtailment_attribution(pdf, piv, irr, wf, pg):
+    """Curtailment attribution page with graceful fallback if explicit flags are absent."""
+    fig = plt.figure(figsize=(PAGE_W, PAGE_H))
+    _header_bar(fig, 'CURTAILMENT ATTRIBUTION', SITE_NAME)
+    _footer(fig, pg)
+
+    gs = GridSpec(2, 2, figure=fig, hspace=0.42, wspace=0.32,
+                  top=0.90, bottom=0.20, left=0.08, right=0.96)
+
+    src_name, flag_df = _load_curtailment_proxy_data()
+    site_pwr = piv.sum(axis=1, min_count=1)
+    ghi_s = irr.set_index('ts')['GHI'].reindex(site_pwr.index) if len(irr) else pd.Series(np.nan, index=site_pwr.index)
+    day = ghi_s > IRR_THRESHOLD
+    valid = day & site_pwr.notna() & ghi_s.notna()
+
+    # Heuristic clipping and potential curtailment candidates.
+    near_clip = valid & (site_pwr >= 0.97 * CAP_AC_KW)
+    pot_curt = valid & (ghi_s >= 700) & (site_pwr.between(0.80 * CAP_AC_KW, 0.97 * CAP_AC_KW))
+
+    if flag_df is not None:
+        aligned = flag_df.reindex(site_pwr.index).ffill()
+        sig = aligned.select_dtypes(include=[np.number])
+        curtailed = sig.notna().any(axis=1) if sig.shape[1] else pd.Series(False, index=site_pwr.index)
+        curtailed = curtailed & valid
+        source_note = f'Explicit curtailment/export signal found in `{src_name}`.'
+    else:
+        curtailed = pd.Series(False, index=site_pwr.index)
+        source_note = ('No explicit curtailment/export-limit flag found in input files.\n'
+                       'Curtailment cannot be isolated with high confidence.')
+
+    # ── Row 0: Signal Prevalence bar chart (full width) ──────────
+    ax2 = fig.add_subplot(gs[0, :])
+    bars = ['Near-clip\n(>=97%)', 'Potential\ncurtailment', 'Explicit\ncurtail flag']
+    vv = [
+        100.0 * near_clip.sum() / max(valid.sum(), 1),
+        100.0 * pot_curt.sum() / max(valid.sum(), 1),
+        100.0 * curtailed.sum() / max(valid.sum(), 1),
+    ]
+    ax2.bar(bars, vv, color=['#B45309', C['secondary'], '#2563A8'], edgecolor='white')
+    ax2.set_ylabel('Share of daytime records (%)')
+    ax2.set_title('Signal Prevalence', fontweight='bold', color=C['primary'])
+    ax2.grid(axis='y', alpha=0.25)
+
+    # ── Row 1: text note (full width, no pie — equal split was uninformative) ──
+    ax3 = fig.add_subplot(gs[1, :])
+    ax3.axis('off')
+    avail_mwh    = float(wf.get('avail_loss', 0))
+    tech_mwh     = float(wf.get('technical_loss', 0))
+    curt_mwh     = float(curtailed.sum()) * INTERVAL_H * CAP_AC_KW / 1000 * 0.2
+    avail_mwh    = max(avail_mwh, 0) if np.isfinite(avail_mwh) else 0
+    tech_mwh     = max(tech_mwh, 0)  if np.isfinite(tech_mwh)  else 0
+    curt_mwh     = max(curt_mwh, 0)  if np.isfinite(curt_mwh)  else 0
+    txt_lines = [
+        source_note,
+        '',
+        f'Estimated loss breakdown (from waterfall):',
+        f'  Availability loss :  {avail_mwh:,.0f} MWh',
+        f'  Technical loss    :  {tech_mwh:,.0f} MWh',
+        f'  Curtailment proxy :  {curt_mwh:,.0f} MWh  (indicative only)',
+        '',
+        f'Signal prevalence (share of daytime records):',
+        f'  Near-clipping (≥97% AC)  : {vv[0]:.1f}%',
+        f'  Potential curtailment     : {vv[1]:.1f}%',
+        f'  Explicit curtailment flag : {vv[2]:.1f}%',
+    ]
+    ax3.text(0.02, 0.97, '\n'.join(txt_lines),
+             va='top', ha='left', fontsize=8, color='#333333',
+             transform=ax3.transAxes, linespacing=1.5)
+
+    rows = [
+        {
+            'sev': 'INFO' if flag_df is not None else 'MEDIUM',
+            'finding': source_note,
+            'action': 'Export inverter/plant controller setpoint channels to separate curtailment from clipping and technical underperformance.',
+        },
+        {
+            'sev': 'INFO',
+            'finding': 'Potential curtailment proxies are indicative only and should not be used for contractual energy claims.',
+            'action': 'Use controller/export meter limits and OEM event logs for bankable attribution.',
+        },
+    ]
+    _page_insight(fig, rows, gs=gs, caption='Analysis: this page separates losses where possible and highlights data gaps that limit curtailment certainty.')
+    pdf.savefig(fig, dpi=150)
+    plt.close(fig)
+
+
+def page_degradation_trend(pdf, pr_res, pg):
+    """Weather-normalized annual PR trend with confidence intervals from monthly PR."""
+    fig = plt.figure(figsize=(PAGE_W, PAGE_H))
+    _header_bar(fig, 'DEGRADATION TREND', SITE_NAME)
+    _footer(fig, pg)
+
+    gs = GridSpec(2, 1, figure=fig, hspace=0.38, top=0.90, bottom=0.18, left=0.10, right=0.96)
+    monthly = pr_res.get('monthly', pd.DataFrame()).copy()
+    if monthly is None or monthly.empty or 'PR' not in monthly.columns:
+        ax = fig.add_subplot(gs[:, 0]); ax.axis('off')
+        ax.text(0.02, 0.8, 'Insufficient monthly PR data to estimate trend.', fontsize=10, color=C['red'])
+        pdf.savefig(fig, dpi=150); plt.close(fig); return
+
+    d = monthly[['PR']].dropna().copy()
+    d['year'] = d.index.year
+    ann = d.groupby('year')['PR'].agg(['mean', 'std', 'count']).reset_index()
+    ann['ci95'] = 1.96 * ann['std'] / ann['count'].clip(lower=1).pow(0.5)
+
+    x = ann['year'].astype(float).values
+    y = ann['mean'].values
+    slope = np.polyfit(x, y, 1)[0] if len(ann) >= 2 else 0.0
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.errorbar(ann['year'], ann['mean'], yerr=ann['ci95'], fmt='o-', color=C['secondary'],
+                 ecolor=C['orange'], capsize=4, linewidth=1.8)
+    if len(ann) >= 2:
+        xx = np.linspace(x.min(), x.max(), 50)
+        yy = np.polyval(np.polyfit(x, y, 1), xx)
+        ax1.plot(xx, yy, '--', color=C['red'], linewidth=1.2, label=f'Trend: {slope:+.2f} pp/year')
+        ax1.legend(fontsize=8)
+    ax1.set_ylabel('Weather-normalized annual PR (%)')
+    ax1.set_title('Annual PR Trend with 95% CI', fontweight='bold', color=C['primary'])
+    ax1.grid(alpha=0.25)
+
+    ax2 = fig.add_subplot(gs[1, 0])
+    ax2.plot(d.index, d['PR'], '.', color=C['secondary'], alpha=0.45, markersize=5, label='Monthly PR')
+    d_roll = d['PR'].rolling(6, min_periods=3).mean()
+    ax2.plot(d_roll.index, d_roll, color=C['red'], linewidth=1.6, label='6-month rolling mean')
+    ax2.axhline(75, color=C['green'], linestyle='--', linewidth=1)
+    ax2.set_ylabel('Monthly PR (%)')
+    ax2.set_title('Monthly PR Stability', fontweight='bold', color=C['primary'])
+    ax2.grid(alpha=0.25)
+    ax2.legend(fontsize=8)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+
+    rows = [{
+        'sev': 'INFO',
+        'finding': f'Estimated trend = {slope:+.2f} percentage-points/year (weather-normalized annual PR).',
+        'action': 'Use at least 3 full years before treating this as a robust degradation estimate.',
+    }]
+    _page_insight(fig, rows, gs=gs, caption='Analysis: trend is inferred from monthly PR aggregates and confidence intervals; limited years increase uncertainty.')
+    pdf.savefig(fig, dpi=150)
+    plt.close(fig)
+
+
+def page_inverter_peer_grouping(pdf, piv, irr, pr_res, avail_res, start_stop_df, pg):
+    """Rule-based peer grouping for action-oriented fleet segmentation."""
+    fig = plt.figure(figsize=(PAGE_W, PAGE_H))
+    _header_bar(fig, 'INVERTER PEER GROUPING', SITE_NAME)
+    _footer(fig, pg)
+
+    gs = GridSpec(2, 2, figure=fig, hspace=0.40, wspace=0.30,
+                  top=0.90, bottom=0.19, left=0.08, right=0.96)
+    site_day = (irr.set_index('ts')['GHI'].reindex(piv.index) > IRR_THRESHOLD) if len(irr) else pd.Series(True, index=piv.index)
+    pr_map = pr_res.get('per_inverter', {})
+    av_map = avail_res.get('per_inverter', {})
+
+    rows = []
+    for inv in piv.columns:
+        s = piv[inv]
+        day_s = s[site_day.reindex(s.index).fillna(False)]
+        mu = float(day_s.mean()) if len(day_s) else np.nan
+        sd = float(day_s.std()) if len(day_s) else np.nan
+        cv = sd / max(mu, 1e-6) if np.isfinite(mu) else np.nan
+        late = float(start_stop_df.loc[inv, 'start_dev']) if start_stop_df is not None and inv in start_stop_df.index else 0.0
+        rows.append({
+            'inv': inv,
+            'pr': float(pr_map.get(inv, np.nan)),
+            'av': float(av_map.get(inv, np.nan)),
+            'cv': cv,
+            'late': late,
+        })
+    df = pd.DataFrame(rows).dropna(subset=['pr', 'av'])
+    if df.empty:
+        ax = fig.add_subplot(gs[:, :]); ax.axis('off')
+        ax.text(0.02, 0.8, 'Insufficient inverter metrics for peer grouping.', fontsize=10, color=C['red'])
+        pdf.savefig(fig, dpi=150); plt.close(fig); return
+
+    pr_thr = df['pr'].mean() - df['pr'].std()
+    cv_thr = df['cv'].quantile(0.75)
+    df['group'] = 'Reference'
+    df.loc[(df['pr'] < pr_thr) & (df['av'] >= 95), 'group'] = 'Low PR + High Av'
+    df.loc[df['cv'] >= cv_thr, 'group'] = 'High Variability'
+    df.loc[df['late'] > 5, 'group'] = 'Late-start Signature'
+
+    palette = {
+        'Reference': C['green'],
+        'Low PR + High Av': C['red'],
+        'High Variability': C['orange'],
+        'Late-start Signature': C['secondary'],
+    }
+
+    ax1 = fig.add_subplot(gs[:, 0])
+    for g, sub in df.groupby('group'):
+        ax1.scatter(sub['av'], sub['pr'], label=f'{g} ({len(sub)})', s=42, alpha=0.85, color=palette.get(g, '#666'))
+    ax1.axhline(pr_thr, color=C['red'], linestyle='--', linewidth=1)
+    ax1.axvline(95, color=C['green'], linestyle='--', linewidth=1)
+    ax1.set_xlabel('Availability (%)')
+    ax1.set_ylabel('PR (%)')
+    ax1.set_title('Peer Groups in PR vs Availability Space', fontweight='bold', color=C['primary'])
+    ax1.grid(alpha=0.25)
+    ax1.legend(fontsize=7, loc='lower left')
+
+    ax2 = fig.add_subplot(gs[0, 1]); ax2.axis('off')
+    cnt = df['group'].value_counts()
+    lines = [f'{k}: {int(v)} inverter(s)' for k, v in cnt.items()]
+    ax2.text(0.0, 0.95, 'Group Summary', fontsize=10, fontweight='bold', color=C['primary'], va='top')
+    ax2.text(0.0, 0.82, '\n'.join(lines), fontsize=8, color='#333333', va='top')
+
+    ax3 = fig.add_subplot(gs[1, 1]); ax3.axis('off')
+    top_bad = df.sort_values(['group', 'pr']).head(10)[['inv', 'group', 'pr', 'av']]
+    ax3.text(0.0, 0.95, 'Priority Units (sample)', fontsize=10, fontweight='bold', color=C['primary'], va='top')
+    y = 0.84
+    for _, r in top_bad.iterrows():
+        ax3.text(0.0, y, f"{r['inv']}: {r['group']} | PR {r['pr']:.1f}% | Av {r['av']:.1f}%", fontsize=7.5, color='#333333')
+        y -= 0.07
+
+    info_rows = [{
+        'sev': 'INFO',
+        'finding': 'Grouping is rule-based for operational triage (not a statistical warranty classification).',
+        'action': 'Use group tags to prioritize field checks: strings/soiling, power quality, and firmware threshold harmonization.',
+    }]
+    _page_insight(fig, info_rows, gs=gs, caption='Analysis: peer grouping separates failure signatures to speed up corrective action planning.')
+    pdf.savefig(fig, dpi=150)
+    plt.close(fig)
+
+
+def page_event_timeline_overlay(pdf, piv, irr, weather_data, pg):
+    """Timeline overlay for outages and weather extremes."""
+    fig = plt.figure(figsize=(PAGE_W, PAGE_H))
+    _header_bar(fig, 'EVENT TIMELINE OVERLAY', SITE_NAME)
+    _footer(fig, pg)
+
+    gs = GridSpec(2, 1, figure=fig, hspace=0.35, top=0.90, bottom=0.18, left=0.09, right=0.96)
+    site_pwr = piv.sum(axis=1, min_count=1)
+    ghi_s = irr.set_index('ts')['GHI'].reindex(site_pwr.index) if len(irr) else pd.Series(np.nan, index=site_pwr.index)
+    day = ghi_s > IRR_THRESHOLD
+
+    daily_av = ((site_pwr > POWER_THRESHOLD * max(piv.shape[1], 1)) & day).resample('D').mean() * 100
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(daily_av.index, daily_av.values, color=C['secondary'], linewidth=1.1, label='Daily site availability proxy')
+    ax1.axhline(95, color=C['green'], linestyle='--', linewidth=1)
+    outage_days = daily_av[daily_av < 80]
+    if len(outage_days):
+        ax1.scatter(outage_days.index, outage_days.values, color=C['red'], s=16, label='Major outage day (<80%)')
+    ax1.set_ylabel('Availability proxy (%)')
+    ax1.set_title('Outage Timeline', fontweight='bold', color=C['primary'])
+    ax1.grid(alpha=0.25)
+    ax1.legend(fontsize=7, loc='lower left')
+
+    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)
+    if weather_data is not None:
+        try:
+            w_dates = pd.to_datetime(weather_data['daily']['time'])
+            w_rain = pd.Series(weather_data['daily']['precipitation_sum'], index=w_dates, dtype='float64')
+            w_tmax = pd.Series(weather_data['daily']['temperature_2m_max'], index=w_dates, dtype='float64')
+            rain_p90 = np.nanpercentile(w_rain.dropna(), 90) if w_rain.notna().any() else np.nan
+            hot_p95 = np.nanpercentile(w_tmax.dropna(), 95) if w_tmax.notna().any() else np.nan
+            ax2.bar(w_rain.index, w_rain.values, width=1.0, color='steelblue', alpha=0.5, label='Rain (mm/day)')
+            hot = w_tmax[w_tmax >= hot_p95] if np.isfinite(hot_p95) else pd.Series(dtype='float64')
+            if len(hot):
+                ax2.scatter(hot.index, np.zeros(len(hot)) + max(w_rain.max(), 1) * 0.85, color=C['red'], s=20, label='Temperature extreme (>=P95)')
+            ax2.axhline(rain_p90, color='navy', linestyle='--', linewidth=1, label='Rain P90')
+            ax2.set_ylabel('Weather marker')
+            ax2.legend(fontsize=7, loc='upper left')
+        except Exception:
+            ax2.text(0.02, 0.8, 'Weather series unavailable for overlay.', transform=ax2.transAxes, color=C['red'])
+    else:
+        ax2.text(0.02, 0.8, 'Weather data unavailable: timeline shows outage events only.', transform=ax2.transAxes, color=C['red'])
+    ax2.set_title('Weather Extremes Overlay (Rain / Temperature)', fontweight='bold', color=C['primary'])
+    ax2.grid(alpha=0.25)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+
+    rows = [{
+        'sev': 'INFO',
+        'finding': f'Major outage days detected: {int((daily_av < 80).sum())}.',
+        'action': 'Overlay with O&M ticket / cleaning logs when available for stronger root-cause attribution.',
+    }]
+    _page_insight(fig, rows, gs=gs, caption='Analysis: timeline overlays operational drops with weather extremes; add maintenance logs for full causality chain.')
     pdf.savefig(fig, dpi=150)
     plt.close(fig)
 
@@ -3078,7 +3556,7 @@ def page_inv_specific_yield(pdf, inv_sy_df, punchlist, pg, piv=None, irr_data=No
     _header_bar(fig, 'PER-INVERTER SPECIFIC YIELD BY MONTH')
     _footer(fig, pg)
 
-    gs = GridSpec(2, 1, figure=fig, hspace=0.65,
+    gs = GridSpec(2, 1, figure=fig, hspace=0.42,
                   top=0.90, bottom=0.18, left=0.11, right=0.93)
 
     # Sort columns in natural order
@@ -3091,7 +3569,7 @@ def page_inv_specific_yield(pdf, inv_sy_df, punchlist, pg, piv=None, irr_data=No
     dev_pct = (df.subtract(fleet_monthly, axis=0)
                .divide(fleet_monthly.clip(lower=1), axis=0) * 100)
     mat = dev_pct.T.values   # shape: n_inv × n_months
-    im = ax1.imshow(mat, aspect='auto', cmap='RdYlGn', vmin=-20, vmax=20,
+    im = ax1.imshow(mat, aspect='auto', cmap=_avail_cmap, vmin=-20, vmax=20,
                     interpolation='nearest')
     ax1.set_yticks(range(len(cols_sorted)))
     ax1.set_yticklabels(cols_sorted, fontsize=5.5)
@@ -3118,7 +3596,7 @@ def page_inv_specific_yield(pdf, inv_sy_df, punchlist, pg, piv=None, irr_data=No
 
     if pr_df is not None and not pr_df.empty:
         pr_mat = pr_df.T.values   # shape: n_inv × n_months
-        im2 = ax2.imshow(pr_mat, aspect='auto', cmap='RdYlGn', vmin=40, vmax=90,
+        im2 = ax2.imshow(pr_mat, aspect='auto', cmap=_avail_cmap, vmin=40, vmax=90,
                          interpolation='nearest')
         ax2.set_yticks(range(len(cols_sorted)))
         ax2.set_yticklabels(cols_sorted, fontsize=5.5)
@@ -3186,110 +3664,158 @@ def page_inv_specific_yield(pdf, inv_sy_df, punchlist, pg, piv=None, irr_data=No
 
 
 def page_data_limitations(pdf, pg):
-    """Annex: what analyses cannot be performed with the available SCADA data."""
+    """Annex: comprehensive analysis checklist + data limitations."""
     import textwrap as _tw
 
     fig = plt.figure(figsize=(PAGE_W, PAGE_H))
-    _header_bar(fig, 'ANNEX — DATA LIMITATIONS & ANALYSIS CONSTRAINTS')
+    _header_bar(fig, 'ANNEX — ANALYSIS CHECKLIST & DATA LIMITATIONS')
     _footer(fig, pg)
 
-    ax = fig.add_axes([0.04, 0.09, 0.92, 0.82])
+    ax = fig.add_axes([0.04, 0.06, 0.92, 0.85])
     ax.axis('off')
     ax.set_xlim(0, 1); ax.set_ylim(0, 1)
 
-    # Intro
-    ax.text(0, 0.99,
-            'The analyses presented in this report are limited by the data available in the SCADA export.\n'
-            'The table below summarises what additional analyses would be possible if additional data channels\n'
-            'or higher-resolution data were available.  Items marked ✗ cannot be performed with current data.',
-            fontsize=7.5, va='top', color='#333333', transform=ax.transAxes, linespacing=1.5)
+    # Intro text — manually wrapped to fit page width
+    ax.text(0, 0.997,
+            'Complete record of analyses run in this report, their completeness, and data constraints\n'
+            'that limit further investigation. Use this checklist to compare across report runs.',
+            fontsize=7.5, va='top', color='#333333', transform=ax.transAxes, linespacing=1.4)
 
-    rows = [
-        # (Analysis, Status, Data Required / Reason)
+    # ── Symbol key — horizontal row ──────────────────────────────
+    KEY_Y = 0.952
+    key_x = 0.0
+    for sym, col, lbl in [
+        ('✓', C['green'],  'Complete'),
+        ('⚠', '#B45309',  'Partial / limited'),
+        ('✗', '#7B1D1D',  'Not possible with current data'),
+    ]:
+        ax.text(key_x,       KEY_Y, sym, fontsize=8, fontweight='bold', color=col,
+                va='top', transform=ax.transAxes)
+        ax.text(key_x + 0.022, KEY_Y, lbl + '   ', fontsize=7, color=col,
+                fontweight='bold', va='top', transform=ax.transAxes)
+        key_x += 0.18   # step right for each symbol
+
+    # ── Combined rows: (Analysis, Status, Note) ──────────────────
+    # Section A — Analyses performed
+    performed = [
+        ('Data availability assessment',        '✓ Complete',
+         'Per-inverter and per-month data completeness evaluated; gaps flagged in punchlist.'),
+        ('Performance Ratio (IEC 61724)',        '✓ Complete',
+         'Monthly and annual PR calculated on DC kWp basis; reference irradiance from SARAH-3.'),
+        ('Irradiance coherence (SARAH-3)',       '✓ Complete',
+         'On-site GHI cross-checked against satellite; bias and correlation quantified.'),
+        ('Inverter availability analysis',       '✓ Complete',
+         'Per-inverter and fleet monthly availability; gaps and low-availability months identified.'),
+        ('Energy loss waterfall',                '✓ Complete',
+         'Budget → actual breakdown: weather correction, availability loss, technical loss, residual.'),
+        ('Per-inverter specific yield',          '✓ Complete',
+         'Monthly kWh/kWp per inverter; heatmap shows seasonal and cross-inverter variance.'),
+        ('MTTF / reliability analysis',          '✓ Complete',
+         'Fault event count and mean-time-to-failure by inverter; outliers flagged.'),
+        ('Inverter start/stop signatures',       '✓ Complete',
+         'Daily startup/shutdown timing vs irradiance; deviations flagged.'),
+        ('Inverter peer grouping',               '✓ Complete',
+         'Operational signature clustering to group similar and outlier inverters.'),
+        ('Event timeline overlay',               '✓ Complete',
+         'Downtime/weather events overlaid on production timeline for traceability.'),
+        ('Weather correlation',                  '✓ Complete',
+         'Monthly PR vs precipitation and temperature; scatter coloured by thermal stress.'),
+        ('Site performance overview',            '✓ Complete',
+         'Monthly energy, PR bar chart, annual summary table, daily specific yield.'),
+        ('Clipping detection',                   '⚠ Indicative only',
+         'Near-ceiling AC operation flagged heuristically; hard clipping requires DC power data.'),
+        ('Curtailment attribution',              '⚠ Indicative only',
+         'No explicit curtailment/export-limit channel found; proxy only — not bankable.'),
+        ('Degradation trend',                    '⚠ Limited',
+         'Only 2 full years available; ≥3 years needed for statistically robust trend estimate.'),
+        ('Weather-corrected PR (POA-based)',     '⚠ Satellite proxy',
+         'No in-plane (POA) sensor on-site; SARAH-3 GHI used as reference — introduces uncertainty.'),
+    ]
+
+    # Section B — Not possible
+    limitations = [
         ('Inverter AC/DC efficiency',            '✗ Not possible',
          'Only AC power (PAC) logged; DC power, DC voltage & DC current channels not exported.'),
         ('String-level fault detection',         '✗ Not possible',
          'Only inverter-level AC power available; MPPT string-level data not in SCADA export.'),
         ('Inverter tripping events < 10 min',    '✗ Not possible',
-         '10-min data resolution; requires ≤1-min SCADA or event-log file from inverter.'),
+         '10-min resolution; requires ≤1-min SCADA or event-log file from inverter OEM.'),
         ('Downtime root-cause classification',   '✗ Not possible',
-         'No alarm / fault codes exported; only running/stopped state inferred from PAC.'),
-        ('Soiling rate quantification',          '✗ Approximate only',
-         'Requires regular IV-curve scans or bifacial soiling sensors; heatmap is indicative only.'),
+         'No alarm / fault codes exported; running/stopped state inferred from PAC only.'),
+        ('Soiling rate quantification',          '✗ Not possible',
+         'Requires IV-curve scans or soiling sensors; no such data in export.'),
         ('Transformer / MV losses',              '✗ Not possible',
          'No metering at PTR1/PTR2 secondary side; only inverter AC output is measured.'),
         ('Grid code compliance (PF, V, f)',      '✗ Not possible',
          'Reactive power (Q), grid voltage (V) and frequency (f) channels not in export.'),
         ('Module degradation rate (LID/PID)',    '✗ Insufficient data',
-         'Less than 3 full calendar years of consistent data; degradation requires 3+ years.'),
-        ('Weather-corrected PR (POA-based)',     '⚠ Satellite proxy only',
-         'GHI measured on-site but no in-plane (POA) sensor; SARAH-3 satellite used as reference.'),
+         'Less than 3 full calendar years of consistent data; 3+ years required.'),
         ('Night-time consumption / standby',     '✗ Not possible',
          'AC metering only captures inverter output; no import/export meter data available.'),
-        ('Clipping losses',                      '⚠ Indicative only',
-         'Can be estimated from DC/AC ratio and irradiance, but requires DC power data for accuracy.'),
         ('Inter-inverter thermal variation',     '✗ Not possible',
          'No per-inverter module temperature; only one site-wide ambient/panel sensor.'),
     ]
 
-    # Column x-positions: Analysis | Status | Reason
-    # Status column widened to 0.17 (was 0.10) so longest label fits on one line
-    COL_X   = [0.00, 0.28, 0.45]
-    WRAP_AN = 38   # analysis column wrap (chars)
-    WRAP_RE = 76   # reason column wrap (chars) — tuned to 0.55-wide column at 6pt
+    COL_X   = [0.00, 0.30, 0.47]
+    WRAP_AN = 38
+    WRAP_RE = 72
 
-    # Dynamic row height: sized to the tallest wrapped cell in that row
-    # LINE_H in axes-fraction units: 6.5pt × 1.25 linespacing / (axes_h × page_h_pt)
-    LINE_H  = 6.5 * 1.25 / (0.82 * PAGE_H * 72)   # ≈ 0.01196 axes units per line
-    ROW_PAD = 0.005                                  # top + bottom padding
+    LINE_H  = 6.0 * 1.2 / (0.85 * PAGE_H * 72)
+    ROW_PAD = 0.004
 
     def _rh(analysis, reason):
         al = _tw.wrap(analysis, width=WRAP_AN) or ['']
         rl = _tw.wrap(reason,   width=WRAP_RE) or ['']
         return max(len(al), 1, len(rl)) * LINE_H + ROW_PAD
 
-    # Table header
-    hy = 0.84
-    hdrs = ['Analysis / KPI', 'Status', 'Reason / Data Needed']
-    for x, h in zip(COL_X, hdrs):
-        ax.text(x, hy, h, fontsize=8, fontweight='bold', color='white',
-                va='top', transform=ax.transAxes,
-                bbox=dict(boxstyle='square,pad=0.1', facecolor=C['primary'],
-                          edgecolor='none'))
-    ax.plot([0.0, 1.0], [hy - 0.022, hy - 0.022],
-            color=C['primary'], lw=1.5, transform=ax.transAxes)
-
-    y = hy - 0.028
-    for idx, (analysis, status, reason) in enumerate(rows):
-        rh = _rh(analysis, reason)
-        bg = '#F5F5F5' if idx % 2 == 0 else 'white'
-        ax.add_patch(plt.Rectangle((0, y - rh), 1, rh,
-                                   facecolor=bg, edgecolor='#E0E0E0', lw=0.4,
+    def _draw_section(title, section_rows, y_start, title_col):
+        """Draw a section header + rows, return y position after last row."""
+        # Section title band
+        ax.add_patch(plt.Rectangle((0, y_start - 0.022), 1, 0.022,
+                                   facecolor=title_col, edgecolor='none',
                                    transform=ax.transAxes))
-        ok_col = C['green'] if '⚠' in status else C['red']
-        cy = y - rh / 2   # vertical centre of this row
+        ax.text(0.005, y_start - 0.003, title,
+                fontsize=7.5, fontweight='bold', color='white',
+                va='top', transform=ax.transAxes)
+        # Column headers
+        hy = y_start - 0.024
+        for x, h in zip(COL_X, ['Analysis / KPI', 'Status', 'Notes / Data Constraint']):
+            ax.text(x, hy, h, fontsize=6.5, fontweight='bold', color=C['primary'],
+                    va='top', transform=ax.transAxes)
+        ax.plot([0.0, 1.0], [hy - 0.013, hy - 0.013],
+                color=C['primary'], lw=0.8, alpha=0.5, transform=ax.transAxes)
+        y = hy - 0.016
+        for idx, (analysis, status, reason) in enumerate(section_rows):
+            rh = _rh(analysis, reason)
+            bg = '#F5F5F5' if idx % 2 == 0 else 'white'
+            ax.add_patch(plt.Rectangle((0, y - rh), 1, rh,
+                                       facecolor=bg, edgecolor='#E0E0E0', lw=0.3,
+                                       transform=ax.transAxes))
+            if '✓' in status:   sc = C['green']
+            elif '⚠' in status: sc = '#B45309'
+            else:               sc = '#7B1D1D'
+            cy = y - rh / 2
+            al_text = '\n'.join(_tw.wrap(analysis, width=WRAP_AN) or [''])
+            rl_text = '\n'.join(_tw.wrap(reason,   width=WRAP_RE) or [''])
+            ax.text(COL_X[0], cy, al_text, fontsize=6.0, va='center',
+                    transform=ax.transAxes, linespacing=1.2)
+            ax.text(COL_X[1], cy, status, fontsize=6.0, va='center',
+                    transform=ax.transAxes, color=sc, fontweight='bold')
+            ax.text(COL_X[2], cy, rl_text, fontsize=5.8, va='center',
+                    transform=ax.transAxes, color='#444444', linespacing=1.2)
+            y -= rh
+        return y
 
-        al_text = '\n'.join(_tw.wrap(analysis, width=WRAP_AN) or [''])
-        rl_text = '\n'.join(_tw.wrap(reason,   width=WRAP_RE) or [''])
-
-        ax.text(COL_X[0], cy, al_text,
-                fontsize=6.5, va='center', transform=ax.transAxes,
-                linespacing=1.25)
-        ax.text(COL_X[1], cy, status,
-                fontsize=6.5, va='center', transform=ax.transAxes,
-                color=ok_col, fontweight='bold')
-        ax.text(COL_X[2], cy, rl_text,
-                fontsize=6.0, va='center', transform=ax.transAxes,
-                color='#444444', linespacing=1.25)
-        y -= rh
+    y = 0.925
+    y = _draw_section('ANALYSES PERFORMED IN THIS REPORT', performed, y, C['primary'])
+    y -= 0.012
+    y = _draw_section('DATA LIMITATIONS — ANALYSES NOT POSSIBLE', limitations, y, '#4A4A4A')
 
     # Footer note
-    ax.text(0.0, y - 0.015,
-            'Note: Fault alarm codes (Sungrow SG250HX event log) would significantly improve '
-            'root-cause classification of the downtime events identified in this report.\n'
-            'Recommendation: configure SCADA export to include all alarm channels, DC power '
-            '(PDC), and string-level MPPT data.',
-            fontsize=7, va='top', color=C['primary'], transform=ax.transAxes,
+    ax.text(0.0, y - 0.010,
+            'Recommendation: configure SCADA export to include alarm/fault codes, DC power (PDC), '
+            'string-level MPPT data, and reactive power (Q) channels to unlock the analyses marked ✗ above.',
+            fontsize=6.5, va='top', color=C['primary'], transform=ax.transAxes,
             linespacing=1.4, style='italic')
 
     pdf.savefig(fig, dpi=150)
@@ -3437,10 +3963,147 @@ def page_punchlist(pdf, punchlist, pg):
 # MAIN
 # ─────────────────────────────────────────────────────────────
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="PVPAT SCADA analysis and PDF report generation")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path(os.getenv("PVPAT_DATA_DIR", str(DEFAULT_DATA_DIR))),
+        help="Input data folder containing CSV inputs and assets",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path(os.getenv("PVPAT_OUT_DIR", str(DEFAULT_OUT_DIR))),
+        help="Output folder for PDF report and run manifest",
+    )
+    parser.add_argument(
+        "--report-name",
+        type=str,
+        default=os.getenv("PVPAT_REPORT_NAME", DEFAULT_REPORT),
+        help="Output PDF file name",
+    )
+    return parser.parse_args()
+
+
+def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        while True:
+            chunk = fh.read(chunk_size)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _safe_iso(ts):
+    if ts is None:
+        return None
+    try:
+        return pd.Timestamp(ts).isoformat()
+    except Exception:
+        return None
+
+
+def _git_commit_hash():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parent,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        return None
+
+
+def build_run_manifest(
+    *,
+    out_path: Path,
+    data_avail,
+    pr_res,
+    avail_res,
+    stuck_report,
+    punchlist,
+):
+    input_files = sorted([p for p in DATA_DIR.glob("*.csv") if p.is_file()])
+    hashed_inputs = []
+    for p in input_files:
+        try:
+            hashed_inputs.append(
+                {
+                    "name": p.name,
+                    "size_bytes": p.stat().st_size,
+                    "sha256": _sha256_file(p),
+                    "mtime_utc": datetime.utcfromtimestamp(p.stat().st_mtime).isoformat() + "Z",
+                }
+            )
+        except Exception as exc:
+            hashed_inputs.append({"name": p.name, "hash_error": str(exc)})
+
+    annual = pr_res.get("annual", pd.DataFrame())
+    if isinstance(annual, pd.DataFrame) and not annual.empty:
+        years = [str(y) for y in annual.index.tolist()]
+    else:
+        years = []
+
+    manifest = {
+        "generated_at_utc": datetime.utcnow().isoformat() + "Z",
+        "script": Path(__file__).name,
+        "git_commit": _git_commit_hash(),
+        "python_version": sys.version.replace("\n", " "),
+        "platform": platform.platform(),
+        "packages": {
+            "numpy": np.__version__,
+            "pandas": pd.__version__,
+            "matplotlib": matplotlib.__version__,
+        },
+        "paths": {
+            "data_dir": str(DATA_DIR),
+            "out_dir": str(OUT_DIR),
+            "report_pdf": str(out_path),
+        },
+        "config": {
+            "site_name": SITE_NAME,
+            "interval_min": INTERVAL_MIN,
+            "irr_threshold_w_m2": IRR_THRESHOLD,
+            "power_threshold_kw": POWER_THRESHOLD,
+            "design_pr": DESIGN_PR,
+            "temp_coeff_per_degC": TEMP_COEFF,
+            "capacity_ac_kw": CAP_AC_KW,
+            "capacity_dc_kwp": CAP_DC_KWP,
+        },
+        "inputs": hashed_inputs,
+        "time_range": {
+            "years_in_pr_table": years,
+            "analysis_start": _safe_iso(pr_res.get("monthly", pd.DataFrame()).index.min() if isinstance(pr_res.get("monthly"), pd.DataFrame) and not pr_res["monthly"].empty else None),
+            "analysis_end": _safe_iso(pr_res.get("monthly", pd.DataFrame()).index.max() if isinstance(pr_res.get("monthly"), pd.DataFrame) and not pr_res["monthly"].empty else None),
+        },
+        "qc_stats": {
+            "data_availability_percent": float(data_avail.get("overall_power", np.nan)),
+            "mean_availability_percent": float(avail_res.get("mean", np.nan)),
+            "stuck_inverters_count": int(len(stuck_report)),
+            "punchlist_items_count": int(len(punchlist)),
+            "punchlist_high_count": int(sum(1 for i in punchlist if i.get("priority") == "HIGH")),
+            "punchlist_medium_count": int(sum(1 for i in punchlist if i.get("priority") == "MEDIUM")),
+        },
+        "warnings": [
+            "Weather API is best-effort and may be unavailable.",
+            "PR and loss KPIs depend on measured irradiance data quality and thresholds in config.",
+        ],
+    }
+    return manifest
+
 def main():
+    args = parse_args()
+    configure_runtime_paths(args.data_dir, args.out_dir, args.report_name)
+
     print("=" * 65)
     print("  PVPAT SCADA Analysis Tool  -  Solar PV Performance Report")
     print("=" * 65)
+    print(f"  Data directory: {DATA_DIR}")
+    print(f"  Output directory: {OUT_DIR}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / REPORT
@@ -3486,11 +4149,11 @@ def main():
         print(f"  Page {pg}: Cover …");
         page_cover(pdf);                                                             pg += 1
         print(f"  Page {pg}: Table of Contents …");
-        page_contents(pdf);                                                          pg += 1
+        page_contents(pdf, include_weather=bool(weather_data));                      pg += 1
         print(f"  Page {pg}: Site Overview …");
         page_site_intro(pdf, pg);                                                    pg += 1
         print(f"  Page {pg}: Executive Summary …");
-        _punchlist_pg = pg + 12 + (1 if weather_data else 0)   # DA+IC+PO+[wx]+IP+SY+AV+WF+MTTF(2)+SS+Conc+PL
+        _punchlist_pg = pg + 17 + (1 if weather_data else 0)   # + clipping/curtailment/degradation/peer/timeline
         page_executive_summary(pdf, pr_res, avail_res, wf, data_avail,
                                cap_kw, punchlist, irr_coh, pg,
                                punchlist_pg=_punchlist_pg);                          pg += 1
@@ -3516,6 +4179,16 @@ def main():
         page_mttf(pdf, mttf_res, punchlist, pg);                                    pg += 2
         print(f"  Page {pg}: Start/Stop Analysis …");
         page_start_stop(pdf, start_stop_df, pg);                                    pg += 1
+        print(f"  Page {pg}: Clipping Detection …");
+        page_clipping_detection(pdf, piv, irr_data, cap_kw, pg);                    pg += 1
+        print(f"  Page {pg}: Curtailment Attribution …");
+        page_curtailment_attribution(pdf, piv, irr_data, wf, pg);                   pg += 1
+        print(f"  Page {pg}: Degradation Trend …");
+        page_degradation_trend(pdf, pr_res, pg);                                    pg += 1
+        print(f"  Page {pg}: Inverter Peer Grouping …");
+        page_inverter_peer_grouping(pdf, piv, irr_data, pr_res, avail_res, start_stop_df, pg); pg += 1
+        print(f"  Page {pg}: Event Timeline Overlay …");
+        page_event_timeline_overlay(pdf, piv, irr_data, weather_data, pg);          pg += 1
         print(f"  Page {pg}: Conclusions …");
         page_conclusion(pdf, pr_res, avail_res, wf, data_avail,
                         mttf_res, punchlist, irr_coh, pg);                           pg += 1
@@ -3544,6 +4217,17 @@ def main():
     hi = sum(1 for i in punchlist if i['priority']=='HIGH')
     me = sum(1 for i in punchlist if i['priority']=='MEDIUM')
     print(f"  Punchlist          : {len(punchlist)} items  ({hi} HIGH, {me} MEDIUM)")
+    manifest = build_run_manifest(
+        out_path=out_path,
+        data_avail=data_avail,
+        pr_res=pr_res,
+        avail_res=avail_res,
+        stuck_report=stuck_report,
+        punchlist=punchlist,
+    )
+    manifest_path = out_path.with_suffix(".manifest.json")
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  Run manifest       : {manifest_path}")
     print("=" * 65)
 
 
