@@ -98,81 +98,28 @@ class ReportChartFactory:
         return {"id": chart_id, "path": str(path), "alt": alt}
 
     def chart_site_map(self) -> dict:
-        """Stylised dot-grid map of France with highlighted site point."""
+        """France image map with highlighted site point."""
         import math
-        from matplotlib.path import Path as MplPath
+        from pathlib import Path as _Path
 
         LAT = 44.0 + 41.0 / 60.0 + 8.3 / 3600.0    # 44.6856°N
         LON = -(0.0 + 33.0 / 60.0 + 34.0 / 3600.0)  # −0.5594°W
 
-        # ── France mainland polygon (lon, lat) ────────────────────────────
-        france = np.array([
-            (-4.70, 48.38),  # Brest
-            (-4.78, 47.96),  # Brittany SW tip
-            (-4.30, 47.80),  # Brittany S
-            (-3.50, 47.55),
-            (-2.80, 47.50),  # Loire-Atlantique
-            (-2.20, 47.25),
-            (-1.55, 47.10),
-            (-1.20, 46.40),  # Vendée
-            (-1.10, 45.70),  # Charente-Maritime
-            (-1.10, 44.60),  # Landes
-            (-1.80, 43.40),  # Basque coast
-            ( 0.30, 43.00),  # Pyrenees centre
-            ( 1.60, 42.80),
-            ( 3.00, 42.65),  # Roussillon
-            ( 3.10, 43.10),
-            ( 4.00, 43.20),
-            ( 5.05, 43.33),
-            ( 5.35, 43.30),  # Marseille
-            ( 6.20, 43.10),
-            ( 7.40, 43.70),  # Nice
-            ( 7.05, 44.10),
-            ( 6.90, 45.85),  # Mont Blanc
-            ( 6.80, 46.15),
-            ( 6.05, 46.42),  # Jura
-            ( 7.60, 47.58),  # Basel
-            ( 7.80, 48.55),  # Strasbourg
-            ( 7.60, 49.00),
-            ( 6.35, 49.45),  # Luxembourg
-            ( 5.90, 49.50),
-            ( 4.10, 50.00),
-            ( 3.15, 50.72),  # Belgian border
-            ( 2.55, 51.00),  # Dunkirk
-            ( 1.60, 50.87),  # Calais
-            ( 0.40, 50.05),
-            ( 0.20, 49.70),  # Normandy
-            (-1.55, 49.68),  # Cherbourg tip
-            (-1.55, 49.20),
-            (-2.00, 48.70),
-            (-3.20, 48.80),
-            (-4.70, 48.38),  # back to Brest
-        ])
+        img_path = _Path(__file__).parent.parent / "france.jpg"
+        img = plt.imread(str(img_path))
 
-        france_path = MplPath(france)
+        # Geographic extent the image covers (lon_min, lon_max, lat_min, lat_max)
+        extent = (-6.0, 10.2, 41.0, 51.6)
 
-        # ── Dot grid — visually square given lat distortion at ~47°N ─────
         mean_lat_rad = math.radians(47.0)
-        lon_step = 0.38
-        lat_step = lon_step * math.cos(mean_lat_rad)   # ~0.259°
+        asp = 1.0 / math.cos(mean_lat_rad)  # ~1.47
 
-        xs = np.arange(-5.5, 9.5, lon_step)
-        ys = np.arange(41.8, 51.8, lat_step)
-        xx, yy = np.meshgrid(xs, ys)
-        pts = np.column_stack([xx.ravel(), yy.ravel()])
-        inside = france_path.contains_points(pts)
-        dx, dy = pts[inside, 0], pts[inside, 1]
-
-        # ── Figure — square to match France's natural proportions ──────────
-        asp = 1.0 / math.cos(mean_lat_rad)   # ~1.47
         fig, ax = plt.subplots(figsize=(7.5, 7.5))
         fig.patch.set_facecolor("white")
         ax.set_facecolor("white")
         ax.set_position([0.01, 0.01, 0.98, 0.98])
 
-        # France dots
-        ax.scatter(dx, dy, s=28, color="#2D3748", alpha=0.82,
-                   linewidths=0, zorder=2)
+        ax.imshow(img, extent=extent, aspect="auto", origin="upper", zorder=1)
 
         # Site dot — prominent red with outer ring
         ax.scatter([LON], [LAT], s=280, color=self.tokens["danger_red"],
@@ -185,13 +132,13 @@ class ReportChartFactory:
         ax.annotate(
             "PVPAT Solar PV Farm\n44°41′N  |  0°34′W",
             xy=(LON, LAT),
-            xytext=(LON - 4.2, LAT + 1.2),
+            xytext=(LON - 4.0, LAT + 1.4),
             fontsize=9, fontweight="bold",
             color=self.tokens["primary_navy"], zorder=7,
             ha="left",
             arrowprops=dict(
                 arrowstyle="->", color=self.tokens["primary_navy"],
-                lw=1.0, connectionstyle="arc3,rad=-0.2",
+                lw=1.2, connectionstyle="arc3,rad=-0.2",
             ),
             bbox=dict(
                 boxstyle="round,pad=0.40", facecolor="white", alpha=0.93,
@@ -200,11 +147,11 @@ class ReportChartFactory:
         )
 
         ax.set_aspect(asp, adjustable="datalim")
-        ax.set_xlim(-5.5, 8.5)
-        ax.set_ylim(42.0, 51.5)
+        ax.set_xlim(-5.8, 9.8)
+        ax.set_ylim(41.2, 51.5)
         ax.axis("off")
 
-        return self._save_png(fig, "site_map", "Stylised dot-grid site location map")
+        return self._save_png(fig, "site_map", "France map with site location")
 
     def chart_data_availability_overview(self) -> dict:
         data_avail = self.analysis["data_avail"]
