@@ -163,35 +163,35 @@ class ReportChartFactory:
         inside = france_path.contains_points(pts)
         dx, dy = pts[inside, 0], pts[inside, 1]
 
-        # ── Figure — tall to fill page; left margin reserved for title ────
+        # ── Figure — square to match France's natural proportions ──────────
         asp = 1.0 / math.cos(mean_lat_rad)   # ~1.47
-        fig, ax = plt.subplots(figsize=(7.5, 10.5))
+        fig, ax = plt.subplots(figsize=(7.5, 7.5))
         fig.patch.set_facecolor("white")
         ax.set_facecolor("white")
-        # axes fills almost the entire figure; left strip (~8%) for title text
-        ax.set_position([0.09, 0.01, 0.90, 0.98])
+        ax.set_position([0.01, 0.01, 0.98, 0.98])
 
         # France dots
-        ax.scatter(dx, dy, s=22, color="#2D3748", alpha=0.78,
+        ax.scatter(dx, dy, s=28, color="#2D3748", alpha=0.82,
                    linewidths=0, zorder=2)
 
         # Site dot — prominent red with outer ring
-        ax.scatter([LON], [LAT], s=260, color=self.tokens["danger_red"],
+        ax.scatter([LON], [LAT], s=280, color=self.tokens["danger_red"],
                    linewidths=2, edgecolors="white", zorder=6)
-        ax.scatter([LON], [LAT], s=520, facecolors="none",
+        ax.scatter([LON], [LAT], s=560, facecolors="none",
                    edgecolors=self.tokens["danger_red"], linewidths=1.2,
                    alpha=0.40, zorder=5)
 
-        # Callout annotation — points right/down from site into open sea
+        # Callout annotation — to the left of the site point
         ax.annotate(
             "PVPAT Solar PV Farm\n44°41′N  |  0°34′W",
             xy=(LON, LAT),
-            xytext=(LON + 3.2, LAT - 1.8),
+            xytext=(LON - 4.2, LAT + 1.2),
             fontsize=9, fontweight="bold",
             color=self.tokens["primary_navy"], zorder=7,
+            ha="left",
             arrowprops=dict(
                 arrowstyle="->", color=self.tokens["primary_navy"],
-                lw=1.0, connectionstyle="arc3,rad=0.2",
+                lw=1.0, connectionstyle="arc3,rad=-0.2",
             ),
             bbox=dict(
                 boxstyle="round,pad=0.40", facecolor="white", alpha=0.93,
@@ -200,17 +200,10 @@ class ReportChartFactory:
         )
 
         ax.set_aspect(asp, adjustable="datalim")
-        ax.set_xlim(-5.8, 8.6)   # tighter — France fills more of the frame
-        ax.set_ylim(41.8, 51.8)
+        ax.set_xlim(-5.5, 8.5)
+        ax.set_ylim(42.0, 51.5)
         ax.axis("off")
 
-        # Title on left side, rotated — no overlap with map
-        fig.text(
-            0.025, 0.50,
-            "PVPAT Solar PV Farm  —  Site Location, SW France",
-            rotation=90, ha="center", va="center",
-            fontsize=10, fontweight="bold", color=self.tokens["primary_navy"],
-        )
         return self._save_png(fig, "site_map", "Stylised dot-grid site location map")
 
     def chart_data_availability_overview(self) -> dict:
