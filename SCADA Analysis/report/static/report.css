@@ -1092,9 +1092,9 @@ img {
 
 .page-action-punchlist .report-table th,
 .page-action-punchlist .report-table td {
-  font-size: 6.15pt;
-  padding: 2px 3px;
-  line-height: 1.18;
+  font-size: 7.5pt;
+  padding: 3px 4px;
+  line-height: 1.22;
 }
 
 .page-action-punchlist .section-summary {
@@ -1116,32 +1116,32 @@ img {
 
 .page-action-punchlist .report-table th:nth-child(1),
 .page-action-punchlist .report-table td:nth-child(1) {
-  width: 7%;
+  width: 6%;
 }
 
 .page-action-punchlist .report-table th:nth-child(2),
 .page-action-punchlist .report-table td:nth-child(2) {
-  width: 10%;
+  width: 9%;
 }
 
 .page-action-punchlist .report-table th:nth-child(3),
 .page-action-punchlist .report-table td:nth-child(3) {
-  width: 9%;
+  width: 30%;
 }
 
 .page-action-punchlist .report-table th:nth-child(4),
 .page-action-punchlist .report-table td:nth-child(4) {
-  width: 10%;
+  width: 38%;
 }
 
 .page-action-punchlist .report-table th:nth-child(5),
 .page-action-punchlist .report-table td:nth-child(5) {
-  width: 25%;
+  width: 9%;
 }
 
 .page-action-punchlist .report-table th:nth-child(6),
 .page-action-punchlist .report-table td:nth-child(6) {
-  width: 39%;
+  width: 8%;
 }
 
 .page-appendix-mttf-detail .report-table th:nth-child(1),
