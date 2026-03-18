@@ -281,13 +281,13 @@ def _view_login():
       .main .block-container,
       [data-testid="stAppViewBlockContainer"],
       section[data-testid="stMain"] .block-container {
-        max-width: 580px !important;
-        padding: calc(1.8rem - 1cm) 2rem calc(2rem - 0.5cm) 2rem !important;
+        max-width: calc(580px - 20mm) !important;
+        padding: calc(1.8rem - 1cm) 2rem 1.8rem 2rem !important;
         margin-top: 1cm !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
-        margin: 0.4rem 0 0.6rem 0 !important;
+        margin: 0.4rem 0 calc(0.6rem + 5mm) 0 !important;
       }
       section[data-testid="stMain"] .block-container [data-testid="stVerticalBlock"] > div {
         gap: 0.35rem !important;
