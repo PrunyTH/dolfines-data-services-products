@@ -106,6 +106,11 @@ def inject_css() -> None:
             --glow:     0 0 0 1px rgba(77,212,172,0.18), 0 0 18px rgba(77,212,172,0.06);
         }
 
+        /* ── Hide Streamlit chrome ────────────────────────────── */
+        header[data-testid="stHeader"] { display: none !important; }
+        #MainMenu { display: none !important; }
+        [data-testid="stToolbar"] { display: none !important; }
+
         /* ── Base ─────────────────────────────────────────────── */
         html, body, .stApp {
             font-family: "IBM Plex Sans", "Inter", system-ui, sans-serif;
