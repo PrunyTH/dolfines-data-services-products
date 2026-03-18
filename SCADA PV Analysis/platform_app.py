@@ -282,48 +282,58 @@ def _render_header(show_logout=True):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _view_login():
+    # Shrink the container to match the header width on the login page
+    st.markdown("""
+    <style>
+      .main .block-container,
+      [data-testid="stAppViewBlockContainer"],
+      section[data-testid="stMain"] .block-container {
+        max-width: 580px !important;
+        padding: 1.8rem 2rem 2rem 2rem !important;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
     _render_header(show_logout=False)
 
-    _, mid, _ = st.columns([2, 1, 2])
-    with mid:
-        st.markdown("""
-        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);
-          border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:0.8rem;">
-          <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:2px;">
-            Client Login
-          </div>
-          <div style="font-size:0.78rem;color:rgba(255,255,255,0.50);">
-            Sign in to access your portfolio.
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("""
+    <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);
+      border-radius:10px;padding:1.4rem 1.6rem;margin-bottom:1rem;">
+      <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
+        Client Login
+      </div>
+      <div style="font-size:0.80rem;color:rgba(255,255,255,0.50);">
+        Sign in to access your portfolio.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        email    = st.text_input("Email address", placeholder="you@company.com", key="login_email")
-        password = st.text_input("Password", type="password", key="login_pw")
-        submit   = st.button("Sign In →", use_container_width=True)
+    email    = st.text_input("Email address", placeholder="you@company.com", key="login_email")
+    password = st.text_input("Password", type="password", key="login_pw")
+    submit   = st.button("Sign In →", use_container_width=True)
 
-        if submit:
-            user = USERS.get(email.strip().lower())
-            if user and user["password"] == password:
-                st.session_state["user"]  = {**user, "email": email.strip().lower()}
-                st.session_state["view"]  = "portfolio"
-                st.rerun()
-            else:
-                st.error("Invalid email or password.")
+    if submit:
+        user = USERS.get(email.strip().lower())
+        if user and user["password"] == password:
+            st.session_state["user"]  = {**user, "email": email.strip().lower()}
+            st.session_state["view"]  = "portfolio"
+            st.rerun()
+        else:
+            st.error("Invalid email or password.")
 
-        st.markdown("""
-        <div style="text-align:center;margin-top:0.7rem;font-size:0.76rem;">
-          <a href="mailto:consulting@8p2.fr?subject=Password%20Reset%20Request"
-             style="color:rgba(255,255,255,0.38);text-decoration:none;">
-            Forgotten your password? Contact us
-          </a>
-        </div>
-        <div style="text-align:center;margin-top:1.1rem;font-size:0.72rem;
-          color:rgba(255,255,255,0.25);">
-          Demo: <code style="color:rgba(240,120,32,0.60);">demo@dolfines.com</code>
-          &nbsp;/&nbsp; <code style="color:rgba(240,120,32,0.60);">pvpat2024</code>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align:center;margin-top:0.8rem;font-size:0.78rem;">
+      <a href="mailto:consulting@8p2.fr?subject=Password%20Reset%20Request"
+         style="color:rgba(255,255,255,0.40);text-decoration:none;">
+        Forgotten your password? Contact us
+      </a>
+    </div>
+    <div style="text-align:center;margin-top:1.1rem;font-size:0.73rem;
+      color:rgba(255,255,255,0.28);">
+      Demo: <code style="color:rgba(240,120,32,0.65);">demo@dolfines.com</code>
+      &nbsp;/&nbsp; <code style="color:rgba(240,120,32,0.65);">pvpat2024</code>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
