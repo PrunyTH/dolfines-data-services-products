@@ -36,6 +36,7 @@ SCRIPT_DIR   = Path(__file__).parent
 LOGO_PATH    = SCRIPT_DIR / "8p2_logo_white.png"
 FAVICON_PATH = SCRIPT_DIR / "8p2_favicon_sq.jpg"
 BG_PATH      = SCRIPT_DIR / "bg_solar.jpg"
+BG_WIND_PATH = SCRIPT_DIR / "bg_wind.jpg"
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from platform_users import USERS, SITES, PRICING
@@ -58,8 +59,9 @@ st.set_page_config(
 def _b64(path: Path) -> str:
     return base64.b64encode(path.read_bytes()).decode()
 
-bg_b64     = _b64(BG_PATH)    if BG_PATH.exists()    else ""
-logo_b64   = _b64(LOGO_PATH)  if LOGO_PATH.exists()  else ""
+bg_b64      = _b64(BG_PATH)      if BG_PATH.exists()      else ""
+bg_wind_b64 = _b64(BG_WIND_PATH) if BG_WIND_PATH.exists() else ""
+logo_b64    = _b64(LOGO_PATH)    if LOGO_PATH.exists()    else ""
 
 bg_css = (f"url('data:image/jpeg;base64,{bg_b64}')"
           if bg_b64 else
@@ -211,6 +213,187 @@ st.markdown(f"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# WIND BACKGROUND
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _apply_wind_bg():
+    """Override background with wind farm image if available."""
+    if not bg_wind_b64:
+        return
+    st.markdown(f"""
+    <style>
+    .stApp {{
+      background-image:
+        linear-gradient(rgba(0,10,35,0.72),rgba(0,10,35,0.72)),
+        url('data:image/jpeg;base64,{bg_wind_b64}') !important;
+      background-size: cover !important;
+      background-position: center !important;
+      background-attachment: fixed !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SMART FILE IMPORT — column detection & normalisation
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Keyword lists for each logical column role
+_ROLE_KEYWORDS = {
+    "time":         ["time", "date", "ts", "timestamp", "datetime", "horodatage",
+                     "udt", "heure", "periode"],
+    "equip":        ["equip", "equipment", "inverter", "inv", "unit", "machine",
+                     "equipement", "onduleur"],
+    "power":        ["pac", "power", "p_ac", "kw", "puissance", "activepow",
+                     "kwac", "pout", "p_kw", "energie_active"],
+    "ghi":          ["ghi", "irr", "irradiance", "solar", "poa", "radiation",
+                     "rayonnement", "g_inc", "g_poa", "soleil"],
+    "turbine":      ["turbine", "turb", "wt", "windturbine", "generator",
+                     "eolienne", "aerogenerateur"],
+    "wind_speed":   ["wind_ms", "windspeed", "wind_speed", "v_wind", "vwind",
+                     "ws", "v_10m", "vitesse_vent", "speed"],
+    "wind_dir":     ["wind_dir", "direction", "dir", "wd", "azimuth",
+                     "direction_vent"],
+    "availability": ["avail", "disponibilite", "disponibility", "status",
+                     "running", "dispo"],
+}
+
+# Maps role → standard column name expected by the pipeline
+_STANDARD_NAMES = {
+    "solar": {
+        "time":  "Time_UDT",
+        "equip": "EQUIP",
+        "power": "PAC",
+        "ghi":   "GHI",
+    },
+    "wind": {
+        "time":         "Time_UDT",
+        "turbine":      "TURBINE",
+        "power":        "POWER_KW",
+        "wind_speed":   "WIND_MS",
+        "wind_dir":     "WIND_DIR_DEG",
+        "availability": "AVAILABILITY_PCT",
+    },
+}
+
+
+def _smart_read_df(f) -> "pd.DataFrame":
+    """Read a CSV or Excel uploaded file into a DataFrame."""
+    import pandas as pd
+    name = f.name.lower()
+    f.seek(0)
+    if name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(f, engine="openpyxl")
+    raw = f.read().decode("utf-8", errors="replace")
+    f.seek(0)
+    seps = {";": raw.count(";"), ",": raw.count(","), "\t": raw.count("\t")}
+    sep = max(seps, key=seps.get)
+    import io as _io
+    decimal = "," if sep == ";" else "."
+    return pd.read_csv(_io.StringIO(raw), sep=sep, decimal=decimal)
+
+
+def _detect_role(col: str) -> str | None:
+    """Return the best-matching role for a column name, or None."""
+    c = col.lower().replace(" ", "_").replace("(", "").replace(")", "")
+    for role, kws in _ROLE_KEYWORDS.items():
+        for kw in kws:
+            if kw in c:
+                return role
+    return None
+
+
+def _auto_map_columns(df, site_type="solar") -> dict:
+    """Return {role: col_name} for detected roles in df."""
+    mapping = {}
+    roles_needed = set(_STANDARD_NAMES.get(site_type, {}).keys())
+    for col in df.columns:
+        role = _detect_role(col)
+        if role and role in roles_needed and role not in mapping:
+            mapping[role] = col
+    return mapping
+
+
+def _show_column_mapper(files, site_type="solar", state_key="col_maps"):
+    """
+    Render column-mapping UI for a list of uploaded files.
+    Returns a dict {filename: {role: col_name}} when all required roles are confirmed,
+    or None if user has not yet confirmed.
+    """
+    import pandas as pd
+
+    roles_needed = _STANDARD_NAMES.get(site_type, {})
+    if not files:
+        return None
+
+    if state_key not in st.session_state:
+        st.session_state[state_key] = {}
+
+    all_confirmed = True
+    result = {}
+
+    for f in files:
+        fname = f.name
+        try:
+            df = _smart_read_df(f)
+        except Exception as exc:
+            st.error(f"Could not read **{fname}**: {exc}")
+            all_confirmed = False
+            continue
+
+        cols = list(df.columns)
+        auto = _auto_map_columns(df, site_type)
+        saved = st.session_state[state_key].get(fname, auto.copy())
+
+        with st.expander(f"📄 {fname} — {len(df):,} rows × {len(cols)} columns",
+                         expanded=(not auto or set(auto) != set(roles_needed))):
+            st.caption("Auto-detected column mapping — adjust if needed:")
+            row_cols = st.columns(len(roles_needed))
+            updated = {}
+            all_found = True
+            for i, (role, std_name) in enumerate(roles_needed.items()):
+                with row_cols[i]:
+                    default_idx = cols.index(saved[role]) if saved.get(role) in cols else 0
+                    chosen = st.selectbox(
+                        f"`{std_name}`",
+                        options=["— skip —"] + cols,
+                        index=default_idx + 1 if saved.get(role) in cols else 0,
+                        key=f"{state_key}_{fname}_{role}",
+                        help=f"Which column contains **{role}** data?",
+                    )
+                    if chosen == "— skip —":
+                        all_found = False
+                    else:
+                        updated[role] = chosen
+
+            st.session_state[state_key][fname] = updated
+            if not all_found:
+                st.warning("Some required columns are not mapped — please select them above.")
+                all_confirmed = False
+            else:
+                st.success("All columns mapped ✔")
+
+        result[fname] = (df, st.session_state[state_key].get(fname, {}))
+
+    return result if all_confirmed else None
+
+
+def _normalise_files(mapped_result, site_type="solar") -> list:
+    """
+    Given output of _show_column_mapper, return list of (filename, normalised_df).
+    Renames columns to standard names and drops the rest.
+    """
+    import pandas as pd
+    std = _STANDARD_NAMES.get(site_type, {})
+    out = []
+    for fname, (df, mapping) in mapped_result.items():
+        rename = {v: std[k] for k, v in mapping.items() if k in std and v in df.columns}
+        normalised = df.rename(columns=rename)[list(rename.values())]
+        out.append((fname, normalised))
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -252,7 +435,7 @@ def _render_header(show_logout=True):
               {logo_img}
               <div>
                 <div style="font-size:1.45rem;font-weight:700;color:white;line-height:1.2;white-space:nowrap;">
-                  PVPAT — Performance Analysis Platform
+                  Performance Analysis Platform
                 </div>
                 {('<div style="font-size:0.84rem;color:rgba(255,255,255,0.55);margin-top:0.15rem;white-space:nowrap;">' + plan_html + '</div>') if plan_html else ''}
               </div>
@@ -268,7 +451,7 @@ def _render_header(show_logout=True):
         <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
           {logo_img}
           <div style="font-size:1.35rem;font-weight:700;color:white;line-height:1.2;text-align:center;">
-            PVPAT — Performance Analysis Platform
+            Performance Analysis Platform
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -303,8 +486,7 @@ def _view_login():
     _render_header(show_logout=False)
 
     st.markdown("""
-    <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);
-      border-radius:10px;padding:calc(1rem - 2mm) 1.4rem;margin-bottom:0.4rem;">
+    <div style="margin-bottom:0.4rem;">
       <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
         Client Login
       </div>
@@ -354,6 +536,54 @@ def _view_portfolio():
     if "deleted_sites"  not in st.session_state: st.session_state["deleted_sites"]  = set()
     if "custom_sites"   not in st.session_state: st.session_state["custom_sites"]   = {}
 
+    # ── Portfolio-specific CSS ─────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+      /* Clickable site card overlay */
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-site-card-click) {
+        position: relative !important;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-site-card-click) .pvpat-site-card-click {
+        pointer-events: none;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-site-card-click) [data-testid="stButton"] {
+        position: absolute !important;
+        inset: 0 !important;
+        z-index: 5 !important;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-site-card-click) [data-testid="stButton"] > button {
+        width: 100% !important;
+        height: 100% !important;
+        opacity: 0 !important;
+        cursor: pointer !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+      }
+      /* Red delete button */
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-del-"]) .stButton > button {
+        background: #e53935 !important;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-del-"]) .stButton > button:hover {
+        background: #b71c1c !important;
+      }
+      /* Red confirm-delete button */
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-confirm-"]) .stButton > button {
+        background: #e53935 !important;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-confirm-"]) .stButton > button:hover {
+        background: #b71c1c !important;
+      }
+      /* Grey cancel button */
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-cancel-"]) .stButton > button {
+        background: rgba(255,255,255,0.18) !important;
+      }
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-cancel-"]) .stButton > button:hover {
+        background: rgba(255,255,255,0.30) !important;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown(f"""
     <div style="margin-bottom:1.2rem;">
       <span style="font-size:1.05rem;color:rgba(255,255,255,0.90);">
@@ -376,6 +606,9 @@ def _view_portfolio():
            for sid, cfg in st.session_state["custom_sites"].items()]
     )
 
+    if "pending_delete" not in st.session_state:
+        st.session_state["pending_delete"] = None
+
     if not all_items:
         st.info("No sites in your portfolio. Add one below.")
     else:
@@ -388,44 +621,86 @@ def _view_portfolio():
                           "offline": "#C0392B"}.get(status, "#888")
 
             site_icon = "🌬️" if site.get("site_type") == "wind" else "☀️"
-            col_info, col_rep, col_del = st.columns([4, 1, 1])
-            with col_info:
-                st.markdown(f"""
-                <div class="site-card">
-                  <div class="site-card-name">
-                    {site_icon} {site['display_name']}
-                    <span style="background:{status_col};color:white;font-size:0.62rem;
-                      padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
-                      font-weight:700;">{status_lbl}</span>
-                  </div>
-                  <div class="site-card-sub">{cap_mwp:.2f} MWp</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col_rep:
-                st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
-                if st.button("Generate Report →", key=f"go_{site_id}"):
-                    st.session_state["selected_site"] = site_id
-                    st.session_state["view"] = "report_select"
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-            with col_del:
-                st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
-                if st.button("🗑 Delete", key=f"del_{site_id}"):
-                    if is_custom:
-                        st.session_state["custom_sites"].pop(site_id, None)
-                    else:
-                        st.session_state["deleted_sites"].add(site_id)
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+            cap_label = "MW" if site.get("site_type") == "wind" else "MWp"
+
+            pending = st.session_state["pending_delete"] == site_id
+
+            if pending:
+                # ── Confirmation row ─────────────────────────────────────────
+                col_msg, col_yes, col_no = st.columns([4, 1.5, 1.2])
+                with col_msg:
+                    st.markdown(
+                        f"<div style='background:rgba(229,57,53,0.15);border:1px solid #e53935;"
+                        f"border-radius:8px;padding:0.75rem 1.1rem;color:white;font-size:0.92rem;'>"
+                        f"⚠️ Permanently delete <strong>{site['display_name']}</strong>? "
+                        f"This cannot be undone.</div>",
+                        unsafe_allow_html=True)
+                with col_yes:
+                    st.markdown(f'<span id="pvpat-confirm-{site_id}"></span>',
+                                unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:0.4rem;'>", unsafe_allow_html=True)
+                    if st.button("Confirm Delete", key=f"yes_del_{site_id}"):
+                        st.session_state["pending_delete"] = None
+                        if is_custom:
+                            st.session_state["custom_sites"].pop(site_id, None)
+                        else:
+                            st.session_state["deleted_sites"].add(site_id)
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with col_no:
+                    st.markdown(f'<span id="pvpat-cancel-{site_id}"></span>',
+                                unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:0.4rem;'>", unsafe_allow_html=True)
+                    if st.button("Cancel", key=f"cancel_del_{site_id}"):
+                        st.session_state["pending_delete"] = None
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                # ── Normal site row ──────────────────────────────────────────
+                col_info, col_rep, col_del = st.columns([4, 2, 1.5])
+                with col_info:
+                    st.markdown(f"""
+                    <div class="site-card pvpat-site-card-click">
+                      <div class="site-card-name">
+                        {site_icon} {site['display_name']}
+                        <span style="background:{status_col};color:white;font-size:0.62rem;
+                          padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
+                          font-weight:700;">{status_lbl}</span>
+                      </div>
+                      <div class="site-card-sub">{cap_mwp:.2f} {cap_label}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("View Site", key=f"sc_{site_id}"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "site_detail"
+                        st.rerun()
+                with col_rep:
+                    st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
+                    if st.button("Generate Report →", key=f"go_{site_id}"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "report_select"
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with col_del:
+                    st.markdown(f'<span id="pvpat-del-{site_id}"></span>',
+                                unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
+                    if st.button("🗑 Delete", key=f"del_{site_id}"):
+                        st.session_state["pending_delete"] = site_id
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
     with st.expander("➕  Add a new site"):
+        _is_wind_add = st.session_state.get("ns_type", "☀️ Solar") == "🌬️ Wind"
         c1, c2, c3 = st.columns(3)
         with c1:
-            new_name = st.text_input("Site name *", placeholder="e.g. Sahara Solar Park", key="ns_name")
+            _name_ph = "e.g. Nordex Wind Farm" if _is_wind_add else "e.g. Sahara Solar Park"
+            new_name = st.text_input("Site name *", placeholder=_name_ph, key="ns_name")
         with c2:
-            new_cap  = st.text_input("Capacity (MWp DC) *", placeholder="e.g. 9.84", key="ns_cap")
+            _cap_lbl = "Capacity (MW) *" if _is_wind_add else "Capacity (MWp DC) *"
+            new_cap  = st.text_input(_cap_lbl, placeholder="e.g. 9.84", key="ns_cap")
         with c3:
             new_type = st.radio("Site type", ["☀️ Solar", "🌬️ Wind"], horizontal=True, key="ns_type")
 
@@ -471,6 +746,9 @@ def _view_report_select():
     site      = SITES.get(site_id, {})
     is_wind   = site.get("site_type") == "wind"
 
+    if is_wind:
+        _apply_wind_bg()
+
     # Initialise selection state (persists across reruns on this page)
     if "report_choice" not in st.session_state:
         st.session_state["report_choice"] = None
@@ -510,18 +788,18 @@ def _view_report_select():
     # from matching :has(.pvpat-report-card), which would make ALL buttons invisible.
     st.markdown("""
     <style>
-      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) {
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) {
         position: relative !important;
       }
-      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) .pvpat-report-card {
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) .pvpat-report-card {
         pointer-events: none;
       }
-      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] {
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] {
         position: absolute !important;
         inset: 0 !important;
         z-index: 5 !important;
       }
-      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] > button {
+      [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] > button {
         width: 100% !important;
         height: 100% !important;
         min-height: 240px !important;
@@ -667,51 +945,95 @@ def _view_daily_config():
     with c2:
         data_source = st.radio(
             "Data source",
-            ["Site SCADA files (auto)", "Upload CSV files"],
+            ["Site SCADA files (auto)", "Upload files"],
             index=0,
         )
 
+    _ACCEPTED = ["csv", "xlsx", "xls", "txt"]
     uploaded_inv  = []
     uploaded_irr  = []
+    mapped_inv    = None
+    mapped_irr    = None
     tmp_data_dir  = None
 
-    if data_source == "Upload CSV files":
+    if data_source == "Upload files":
         st.markdown("""<div class="sub-hdr">Upload SCADA Data</div>""",
                     unsafe_allow_html=True)
+        st.caption(
+            "Upload CSV or Excel files — the platform will auto-detect columns "
+            "and prompt you to confirm or correct the mapping before generating."
+        )
         cu1, cu2 = st.columns(2)
         with cu1:
-            st.caption("Inverter power CSV(s) — columns: `Time_UDT ; EQUIP ; PAC`")
+            st.markdown("**Inverter / power files**")
             uploaded_inv = st.file_uploader(
-                "Inverter power files", type=["csv"],
+                "Power data (CSV / Excel)", type=_ACCEPTED,
                 accept_multiple_files=True, key="up_inv")
         with cu2:
-            st.caption("Irradiance CSV — columns: `Time_UDT ; GHI`")
+            st.markdown("**Irradiance / meteo file**")
             uploaded_irr = st.file_uploader(
-                "Irradiance file", type=["csv"],
+                "Irradiance data (CSV / Excel)", type=_ACCEPTED,
                 accept_multiple_files=True, key="up_irr")
+
+        # ── Column mapping preview ─────────────────────────────────────────────
+        if uploaded_inv:
+            st.markdown("<div class='sub-hdr'>Column Mapping — Inverter Files</div>",
+                        unsafe_allow_html=True)
+            mapped_inv = _show_column_mapper(
+                uploaded_inv, site_type="solar", state_key="cm_inv")
+        if uploaded_irr:
+            st.markdown("<div class='sub-hdr'>Column Mapping — Irradiance File</div>",
+                        unsafe_allow_html=True)
+            # Irradiance: only time + ghi roles needed
+            mapped_irr = _show_column_mapper(
+                uploaded_irr, site_type="solar", state_key="cm_irr")
 
     st.divider()
 
+    # Disable generate button if files uploaded but mapping not yet confirmed
+    _files_pending = (data_source == "Upload files" and
+                      (uploaded_inv or uploaded_irr) and
+                      ((uploaded_inv and mapped_inv is None) or
+                       (uploaded_irr and mapped_irr is None)))
+    if _files_pending:
+        st.info("✏️ Confirm the column mapping above, then click Generate.")
+
     _, col_btn, _ = st.columns([2, 2, 2])
     with col_btn:
-        generate = st.button("⚡ Generate Daily Report")
+        generate = st.button("⚡ Generate Daily Report", disabled=_files_pending)
 
     if generate:
         import tempfile, shutil
         from pathlib import Path as _Path
 
         # Resolve data directory
-        if data_source == "Upload CSV files" and (uploaded_inv or uploaded_irr):
+        if data_source == "Upload files" and (uploaded_inv or uploaded_irr):
             tmp = tempfile.mkdtemp(prefix="pvpat_daily_")
             tmp_data_dir = _Path(tmp)
-            for f in (uploaded_inv or []):
-                (tmp_data_dir / f.name).write_bytes(f.getbuffer().tobytes())
-            for f in (uploaded_irr or []):
-                name = f.name
-                # Prefix with "irradiance_" so loader recognises it
-                if not any(k in name.lower() for k in ("irr","ghi","irradiance","meteo")):
-                    name = "irradiance_" + name
-                (tmp_data_dir / name).write_bytes(f.getbuffer().tobytes())
+
+            # Write normalised inverter files
+            if mapped_inv:
+                for fname, norm_df in _normalise_files(mapped_inv, "solar"):
+                    norm_df.to_csv(tmp_data_dir / fname, index=False, sep=";")
+            elif uploaded_inv:
+                for f in uploaded_inv:
+                    (tmp_data_dir / f.name).write_bytes(f.getbuffer().tobytes())
+
+            # Write normalised irradiance files
+            if mapped_irr:
+                for fname, norm_df in _normalise_files(mapped_irr, "solar"):
+                    out_name = fname
+                    if not any(k in out_name.lower()
+                               for k in ("irr","ghi","irradiance","meteo")):
+                        out_name = "irradiance_" + out_name
+                    norm_df.to_csv(tmp_data_dir / out_name, index=False, sep=";")
+            elif uploaded_irr:
+                for f in uploaded_irr:
+                    name = f.name
+                    if not any(k in name.lower()
+                               for k in ("irr","ghi","irradiance","meteo")):
+                        name = "irradiance_" + name
+                    (tmp_data_dir / name).write_bytes(f.getbuffer().tobytes())
         else:
             tmp_data_dir = _Path(site["data_dir"]) if "data_dir" in site else None
 
@@ -919,9 +1241,16 @@ def _view_comp_info():
             st.markdown(f"{'✅' if n_irr else '⚠️'} **Irradiance:** {n_irr} file(s)")
         with c2:
             st.markdown(f"{'✅' if n_oth else '—'} **Other data:** {n_oth} file(s)")
-            st.markdown(f"🏭 **{site.get('n_inverters','?')} inverters** × "
-                        f"{site.get('inv_ac_kw',0):.0f} kW = "
-                        f"{site.get('cap_ac_kw',0)/1000:.1f} MW AC")
+            cap_dc_mw = site.get("cap_dc_kwp", 0) / 1000
+            cap_ac_mw = site.get("cap_ac_kw",  0) / 1000
+            n_inv = site.get("n_inverters", 0)
+            if n_inv:
+                st.markdown(f"🏭 **{n_inv} inverters** × "
+                            f"{site.get('inv_ac_kw',0):.0f} kW = "
+                            f"{cap_ac_mw:.2f} MW AC")
+            else:
+                st.markdown(f"🏭 **{cap_dc_mw:.2f} MWp DC** "
+                            f"({cap_ac_mw:.2f} MW AC)")
         with c3:
             st.markdown(f"📍 {site.get('region','')}, {site.get('country','')}")
             st.markdown(f"📅 COD: {site.get('cod','—')}")
@@ -1019,6 +1348,7 @@ def _view_comp_info():
 def _view_wind_daily_config():
     _sync_custom_sites()
     _render_header()
+    _apply_wind_bg()
 
     site_id = st.session_state.get("selected_site", "")
     site    = SITES.get(site_id, {})
@@ -1086,6 +1416,137 @@ def _view_wind_daily_config():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# VIEW: SITE DETAIL  (intro page with key info, technical specs, map)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _view_site_detail():
+    _sync_custom_sites()
+    _render_header()
+
+    site_id  = st.session_state.get("selected_site", "")
+    site     = SITES.get(site_id, {})
+    is_wind  = site.get("site_type") == "wind"
+    site_icon = "🌬️" if is_wind else "☀️"
+
+    if is_wind:
+        _apply_wind_bg()
+
+    col_back, _ = st.columns([2, 4])
+    with col_back:
+        if st.button("← Back to Portfolio"):
+            st.session_state["view"] = "portfolio"
+            st.rerun()
+
+    st.markdown(
+        f"<div class='step-hdr'>{site_icon} {site.get('display_name', '')}</div>",
+        unsafe_allow_html=True)
+
+    cap_mwp   = site.get("cap_dc_kwp", 0) / 1000
+    cap_ac    = site.get("cap_ac_kw",  0) / 1000
+    status    = site.get("status", "operational")
+    status_col = {"operational": "#2E8B57", "maintenance": "#E67E22",
+                  "offline": "#C0392B"}.get(status, "#888")
+
+    col_left, col_right = st.columns([1.1, 1])
+
+    with col_left:
+        st.markdown("<div class='sub-hdr'>Site Information</div>", unsafe_allow_html=True)
+        loc_parts = [site.get("region", ""), site.get("country", "")]
+        location  = ", ".join(p for p in loc_parts if p)
+        info_rows = [
+            ("Location",   location or "—"),
+            ("Status",     f"<span style='color:{status_col};font-weight:700;'>"
+                           f"{status.upper()}</span>"),
+            ("COD",        site.get("cod", "—")),
+            ("Technology", site.get("technology", "—")),
+        ]
+        if is_wind:
+            info_rows.append(("Capacity", f"{cap_mwp:.2f} MW"))
+        else:
+            info_rows += [
+                ("DC Capacity", f"{cap_mwp:.2f} MWp"),
+                ("AC Capacity", f"{cap_ac:.2f} MW"),
+            ]
+        st.markdown(
+            "<table style='border-collapse:collapse;width:100%;'><tbody>"
+            + "".join(
+                f"<tr><td style='color:rgba(255,255,255,0.55);font-size:0.83rem;"
+                f"padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top;'>{k}</td>"
+                f"<td style='color:white;font-size:0.88rem;padding:5px 0;'>{v}</td></tr>"
+                for k, v in info_rows
+            )
+            + "</tbody></table>",
+            unsafe_allow_html=True)
+
+        st.markdown("<div class='sub-hdr' style='margin-top:1rem;'>Technical Details</div>",
+                    unsafe_allow_html=True)
+        if is_wind:
+            tech_rows = [
+                ("Turbine model",    site.get("inverter_model", "—")),
+                ("No. of turbines",  str(site.get("n_inverters", "—"))),
+                ("Unit capacity",    (f"{site['inv_ac_kw']:.0f} kW"
+                                      if site.get("inv_ac_kw") else "—")),
+            ]
+        else:
+            tech_rows = [
+                ("Inverter model",   site.get("inverter_model", "—")),
+                ("No. of inverters", str(site.get("n_inverters", "—"))),
+                ("Inverter size",    (f"{site['inv_ac_kw']:.0f} kW"
+                                      if site.get("inv_ac_kw") else "—")),
+                ("No. of modules",   (f"{site['n_modules']:,}"
+                                      if site.get("n_modules") else "—")),
+                ("Module Wp",        (f"{site['module_wp']:.0f} Wp"
+                                      if site.get("module_wp") else "—")),
+                ("DC/AC ratio",      (f"{site['dc_ac_ratio']:.2f}"
+                                      if site.get("dc_ac_ratio") else "—")),
+                ("Design PR",        (f"{site['design_pr']*100:.1f}%"
+                                      if site.get("design_pr") else "—")),
+            ]
+        st.markdown(
+            "<table style='border-collapse:collapse;width:100%;'><tbody>"
+            + "".join(
+                f"<tr><td style='color:rgba(255,255,255,0.55);font-size:0.83rem;"
+                f"padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top;'>{k}</td>"
+                f"<td style='color:white;font-size:0.88rem;padding:5px 0;'>{v}</td></tr>"
+                for k, v in tech_rows
+            )
+            + "</tbody></table>",
+            unsafe_allow_html=True)
+
+    with col_right:
+        lat = site.get("lat")
+        lon = site.get("lon")
+        if lat and lon:
+            st.markdown("<div class='sub-hdr'>Location Map</div>", unsafe_allow_html=True)
+            bbox = f"{lon-0.15},{lat-0.10},{lon+0.15},{lat+0.10}"
+            st.markdown(f"""
+            <iframe
+              src="https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={lat},{lon}"
+              style="width:100%;height:310px;border:1px solid rgba(255,255,255,0.15);
+                     border-radius:8px;" loading="lazy">
+            </iframe>
+            <div style="font-size:0.70rem;color:rgba(255,255,255,0.35);
+                        margin-top:4px;text-align:right;">
+              Map © <a href="https://www.openstreetmap.org/"
+                       style="color:rgba(255,255,255,0.35);">OpenStreetMap</a> contributors
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(
+                "<p style='color:rgba(255,255,255,0.45);font-size:0.85rem;margin-top:2rem;'>"
+                "No GPS coordinates configured for this site.</p>",
+                unsafe_allow_html=True)
+
+    st.divider()
+    _, col_gen, _ = st.columns([2, 2, 2])
+    with col_gen:
+        if st.button(f"{'🌬️' if is_wind else '⚡'} Generate Report →",
+                     key="btn_detail_gen", use_container_width=True):
+            st.session_state["view"] = "report_select"
+            st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ROUTER
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1096,6 +1557,8 @@ else:
     view = st.session_state.get("view", "portfolio")
     if view == "portfolio":
         _view_portfolio()
+    elif view == "site_detail":
+        _view_site_detail()
     elif view == "report_select":
         _view_report_select()
     elif view == "daily_config":
