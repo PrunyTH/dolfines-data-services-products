@@ -213,26 +213,33 @@ st.markdown(f"""
     color:rgba(255,255,255,0.65) !important;
   }}
 </style>
-<script>
-(function() {{
-  function attachDragListeners() {{
-    document.querySelectorAll('[data-testid="stFileUploaderDropzone"]').forEach(function(el) {{
-      if (el._dragBound) return;
-      el._dragBound = true;
-      el.addEventListener('dragenter', function(e) {{ el.classList.add('drag-over'); }});
-      el.addEventListener('dragover',  function(e) {{ el.classList.add('drag-over'); }});
-      el.addEventListener('dragleave', function(e) {{
-        if (!el.contains(e.relatedTarget)) el.classList.remove('drag-over');
-      }});
-      el.addEventListener('drop', function(e) {{ el.classList.remove('drag-over'); }});
-    }});
-  }}
-  // Run on load and re-run when Streamlit re-renders DOM
-  attachDragListeners();
-  new MutationObserver(attachDragListeners).observe(document.body, {{childList:true, subtree:true}});
-}})();
-</script>
 """, unsafe_allow_html=True)
+
+# Inject drag-over highlight JS via components.html so it actually executes
+# (st.markdown strips <script> tags; components.html runs in a real iframe
+#  with access to the parent document via window.parent)
+import streamlit.components.v1 as _components
+_components.html("""
+<script>
+(function() {
+  var doc = window.parent.document;
+  function attach() {
+    doc.querySelectorAll('[data-testid="stFileUploaderDropzone"]').forEach(function(el) {
+      if (el._db) return;
+      el._db = true;
+      el.addEventListener('dragenter', function() { el.classList.add('drag-over'); }, true);
+      el.addEventListener('dragover',  function(e) { e.stopPropagation(); el.classList.add('drag-over'); }, true);
+      el.addEventListener('dragleave', function(e) {
+        if (!el.contains(e.relatedTarget)) el.classList.remove('drag-over');
+      }, true);
+      el.addEventListener('drop', function() { el.classList.remove('drag-over'); }, true);
+    });
+  }
+  attach();
+  new MutationObserver(attach).observe(doc.body, {childList: true, subtree: true});
+})();
+</script>
+""", height=0, scrolling=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
