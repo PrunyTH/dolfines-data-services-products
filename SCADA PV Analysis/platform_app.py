@@ -68,7 +68,7 @@ bg_css = (f"url('data:image/jpeg;base64,{bg_b64}')"
           "linear-gradient(135deg,#001a3a 0%,#003366 60%,#0a4d8c 100%)")
 
 logo_img = (f'<img src="data:image/png;base64,{logo_b64}" '
-            f'style="height:52px;width:auto;flex-shrink:0;" />'
+            f'style="height:62px;width:auto;flex-shrink:0;" />'
             if logo_b64 else "")
 
 
