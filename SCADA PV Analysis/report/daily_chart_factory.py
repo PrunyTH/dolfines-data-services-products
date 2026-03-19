@@ -89,7 +89,8 @@ def chart_daily_irradiance(irradiance: dict,
         bar_width = 55 / (24 * 60)
         ax2.bar(hourly_kwh.index, hourly_kwh.values,
                 width=bar_width, align="edge",
-                color=_BLUE, alpha=0.55, label="Prod. (kWh/h)", zorder=2)
+                color="none", edgecolor=_BLUE, linewidth=1.2,
+                label="Prod. (kWh/h)", zorder=2)
         ax2.set_ylabel("AC Production  (kWh/h)", color=_BLUE)
         ax2.tick_params(axis="y", labelcolor=_BLUE)
         ax2.set_ylim(bottom=0)

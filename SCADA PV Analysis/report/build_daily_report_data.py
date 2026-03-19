@@ -116,9 +116,13 @@ def build_daily_report(
     for _, row in per_inv.iterrows():
         pr_pct   = row["pr"] * 100
         avail    = row["availability"] * 100
-        ok_class = "" if row["pr_ok"] else "row-warning"
-        if avail == 0:
+        # Colour-code by PR%: below 70% → red, below target → orange, else → green
+        if avail == 0 or pr_pct < 70:
             ok_class = "row-danger"
+        elif not row["pr_ok"]:
+            ok_class = "row-warning"
+        else:
+            ok_class = "row-success"
         inv_rows.append({
             "inverter":   row["inverter"],
             "spec_yield": f"{row['spec_yield']:.3f}",
