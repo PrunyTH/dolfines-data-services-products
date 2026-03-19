@@ -299,7 +299,7 @@ def _view_login():
 
     st.markdown("""
     <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);
-      border-radius:10px;padding:1rem 1.4rem;margin-bottom:0.4rem;">
+      border-radius:10px;padding:calc(1rem - 2mm) 1.4rem;margin-bottom:0.4rem;">
       <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
         Client Login
       </div>
