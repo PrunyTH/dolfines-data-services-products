@@ -1509,7 +1509,7 @@ def _view_site_detail():
             st.markdown(f"""
             <iframe
               src="https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={lat},{lon}"
-              style="width:100%;height:230px;border:1px solid rgba(255,255,255,0.15);
+              style="width:100%;height:185px;border:1px solid rgba(255,255,255,0.15);
                      border-radius:8px;" loading="lazy">
             </iframe>
             <div style="font-size:0.70rem;color:rgba(255,255,255,0.35);
@@ -1558,8 +1558,7 @@ def _view_site_detail():
         _ax.tick_params(colors="white", labelsize=6.5)
         for spine in _ax.spines.values():
             spine.set_visible(False)
-        _ax.set_ylabel("PR (%)", color="rgba(255,255,255,0.55)", fontsize=6.5)
-        _ax.yaxis.label.set_color("white")
+        _ax.set_ylabel("PR (%)", color=(1, 1, 1, 0.55), fontsize=6.5)
         _ax.grid(axis="y", color="white", alpha=0.08, zorder=0)
 
         _patch = _mpatches.Patch(color="#f0c040",
