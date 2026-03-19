@@ -606,7 +606,7 @@ def _view_portfolio():
 
             if pending:
                 # ── Confirmation row ─────────────────────────────────────────
-                col_msg, col_yes, col_no = st.columns([4, 1.5, 1.2])
+                col_msg, col_yes, col_no = st.columns([4, 1.5, 1.2], vertical_alignment="center")
                 with col_msg:
                     st.markdown(
                         f"<div style='background:rgba(229,57,53,0.15);border:1px solid #e53935;"
@@ -617,7 +617,6 @@ def _view_portfolio():
                 with col_yes:
                     st.markdown(f'<span id="pvpat-confirm-{site_id}"></span>',
                                 unsafe_allow_html=True)
-                    st.markdown("<div style='margin-top:0.4rem;'>", unsafe_allow_html=True)
                     if st.button("Confirm Delete", key=f"yes_del_{site_id}"):
                         st.session_state["pending_delete"] = None
                         if is_custom:
@@ -625,18 +624,16 @@ def _view_portfolio():
                         else:
                             st.session_state["deleted_sites"].add(site_id)
                         st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
                 with col_no:
                     st.markdown(f'<span id="pvpat-cancel-{site_id}"></span>',
                                 unsafe_allow_html=True)
-                    st.markdown("<div style='margin-top:0.4rem;'>", unsafe_allow_html=True)
                     if st.button("Cancel", key=f"cancel_del_{site_id}"):
                         st.session_state["pending_delete"] = None
                         st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
             else:
                 # ── Normal site row ──────────────────────────────────────────
-                col_info, col_view, col_rep, col_del = st.columns([3.5, 1.2, 1.8, 1.2])
+                col_info, col_view, col_rep, col_del = st.columns(
+                    [3.5, 1.2, 1.8, 1.2], vertical_alignment="center")
                 with col_info:
                     st.markdown(f"""
                     <div class="site-card">
@@ -650,27 +647,21 @@ def _view_portfolio():
                     </div>
                     """, unsafe_allow_html=True)
                 with col_view:
-                    st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
                     if st.button("View Site →", key=f"sc_{site_id}"):
                         st.session_state["selected_site"] = site_id
                         st.session_state["view"] = "site_detail"
                         st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
                 with col_rep:
-                    st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
                     if st.button("Generate Report →", key=f"go_{site_id}"):
                         st.session_state["selected_site"] = site_id
                         st.session_state["view"] = "report_select"
                         st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
                 with col_del:
                     st.markdown(f'<span id="pvpat-del-{site_id}"></span>',
                                 unsafe_allow_html=True)
-                    st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
                     if st.button("🗑 Delete", key=f"del_{site_id}"):
                         st.session_state["pending_delete"] = site_id
                         st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
@@ -1449,12 +1440,16 @@ def _view_site_detail():
                 ("DC Capacity", f"{cap_mwp:.2f} MWp"),
                 ("AC Capacity", f"{cap_ac:.2f} MW"),
             ]
+        _TD_LBL = ("color:rgba(255,255,255,0.55);font-size:0.83rem;"
+                   "padding:5px 16px 5px 0;white-space:nowrap;"
+                   "vertical-align:top;width:130px;")
+        _TD_VAL = "color:white;font-size:0.88rem;padding:5px 0;"
+
         st.markdown(
             "<table style='border-collapse:collapse;width:100%;'><tbody>"
             + "".join(
-                f"<tr><td style='color:rgba(255,255,255,0.55);font-size:0.83rem;"
-                f"padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top;'>{k}</td>"
-                f"<td style='color:white;font-size:0.88rem;padding:5px 0;'>{v}</td></tr>"
+                f"<tr><td style='{_TD_LBL}'>{k}</td>"
+                f"<td style='{_TD_VAL}'>{v}</td></tr>"
                 for k, v in info_rows
             )
             + "</tbody></table>",
@@ -1487,9 +1482,8 @@ def _view_site_detail():
         st.markdown(
             "<table style='border-collapse:collapse;width:100%;'><tbody>"
             + "".join(
-                f"<tr><td style='color:rgba(255,255,255,0.55);font-size:0.83rem;"
-                f"padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top;'>{k}</td>"
-                f"<td style='color:white;font-size:0.88rem;padding:5px 0;'>{v}</td></tr>"
+                f"<tr><td style='{_TD_LBL}'>{k}</td>"
+                f"<td style='{_TD_VAL}'>{v}</td></tr>"
                 for k, v in tech_rows
             )
             + "</tbody></table>",
@@ -1500,7 +1494,7 @@ def _view_site_detail():
         lon = site.get("lon")
         if lat and lon:
             st.markdown("<div class='sub-hdr'>Location Map</div>", unsafe_allow_html=True)
-            bbox = f"{lon-0.15},{lat-0.10},{lon+0.15},{lat+0.10}"
+            bbox = f"{lon-15},{lat-10},{lon+15},{lat+10}"
             st.markdown(f"""
             <iframe
               src="https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={lat},{lon}"
