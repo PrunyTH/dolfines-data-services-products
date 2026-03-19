@@ -539,6 +539,16 @@ def _view_portfolio():
     # ── Portfolio-specific CSS ─────────────────────────────────────────────────
     st.markdown("""
     <style>
+      /* Collapse the zero-content span marker containers so they add no height */
+      [data-testid="stMarkdownContainer"]:has(span[id^="pvpat-del-"]),
+      [data-testid="stMarkdownContainer"]:has(span[id^="pvpat-confirm-"]),
+      [data-testid="stMarkdownContainer"]:has(span[id^="pvpat-cancel-"]) {
+        height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 0 !important;
+      }
       /* Red delete button */
       [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]:has([id^="pvpat-del-"]) .stButton > button {
         background: #e53935 !important;
