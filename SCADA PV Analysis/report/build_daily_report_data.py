@@ -427,344 +427,521 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
     cap_dc      = site_cfg["cap_dc_kwp"]
     cap_ac      = site_cfg["cap_ac_kw"]
 
-    # KPI colour helpers
-    def pr_color(pr_pct):
+    # ── KPI status-class helpers ─────────────────────────────────────────────
+    def pr_status(pr_pct):
         if pr_pct >= pr_target * 100 - 2:
-            return "#2E8B57"
+            return "status-success"
         elif pr_pct >= pr_target * 100 - 8:
-            return "#E67E22"
-        return "#C0392B"
+            return "status-warning"
+        return "status-danger"
 
-    def avail_color(avail_pct):
-        return "#2E8B57" if avail_pct >= 95 else ("#E67E22" if avail_pct >= 85 else "#C0392B")
+    def avail_status(avail_pct):
+        if avail_pct >= 95:
+            return "status-success"
+        elif avail_pct >= 85:
+            return "status-warning"
+        return "status-danger"
 
-    # Alerts HTML
-    alerts_html = ""
-    if not alerts:
-        alerts_html = "<p style='color:#2E8B57;font-weight:600;'>✓ No alerts detected for this date.</p>"
-    else:
-        rows_html = ""
-        for a in alerts:
-            bg = {"HIGH": "#fff0f0", "MEDIUM": "#fff8e1", "INFO": "#f0f4ff"}.get(a["severity"], "#fff")
-            badge_col = {"HIGH": "#C0392B", "MEDIUM": "#E67E22", "INFO": "#5B8DD9"}.get(a["severity"], "#999")
-            rows_html += f"""
-            <tr style="background:{bg};">
-              <td style="padding:4px 8px;font-size:8pt;">
-                <span style="background:{badge_col};color:white;padding:1px 7px;
-                  border-radius:10px;font-size:7pt;font-weight:700;">{a["severity"]}</span>
-              </td>
-              <td style="padding:4px 8px;font-size:8pt;font-weight:600;">{a["inverter"]}</td>
-              <td style="padding:4px 8px;font-size:8pt;">{a["description"]}</td>
-              <td style="padding:4px 8px;font-size:8pt;color:#555;">{a["likely_cause"]}</td>
-              <td style="padding:4px 8px;font-size:8pt;">{a["recommended_action"]}</td>
-            </tr>"""
-        alerts_html = f"""
-        <table style="width:100%;border-collapse:collapse;font-family:'Open Sans',Arial,sans-serif;">
-          <thead>
-            <tr style="background:#003D6B;color:white;">
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Severity</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Inverter</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Description</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Likely Cause</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Recommended Action</th>
-            </tr>
-          </thead>
-          <tbody>{rows_html}</tbody>
-        </table>"""
-
-    # Inverter table
-    inv_table_rows = ""
-    for r in inv_rows:
-        bg = {"row-danger": "#fff0f0", "row-warning": "#fff8e1"}.get(r["row_class"], "")
-        inv_table_rows += f"""
-        <tr style="background:{bg};">
-          <td style="padding:3px 6px;font-size:7.5pt;font-weight:600;">{r["inverter"]}</td>
-          <td style="padding:3px 6px;font-size:7.5pt;text-align:right;">{r["spec_yield"]}</td>
-          <td style="padding:3px 6px;font-size:7.5pt;text-align:right;">{r["energy_kwh"]}</td>
-          <td style="padding:3px 6px;font-size:7.5pt;text-align:right;">{r["pr_pct"]}</td>
-          <td style="padding:3px 6px;font-size:7.5pt;text-align:right;">{r["avail_pct"]}</td>
-          <td style="padding:3px 6px;font-size:7.5pt;text-align:right;">{r["peak_kw"]}</td>
-        </tr>"""
-
-    logo_html = (f'<img src="{logo_b64}" style="height:48px;width:auto;" />'
-                 if logo_b64 else "")
-
+    # ── Pre-compute counts ────────────────────────────────────────────────────
     high_count   = sum(1 for a in alerts if a["severity"] == "HIGH")
     medium_count = sum(1 for a in alerts if a["severity"] == "MEDIUM")
     alert_summary = (f"{high_count} HIGH · {medium_count} MEDIUM"
                      if (high_count or medium_count) else "None")
+    alerts_status = ("status-danger" if high_count
+                     else "status-warning" if medium_count
+                     else "status-success")
+    delta_status  = ("status-success"
+                     if site_totals["energy_delta_kwh"] >= 0
+                     else "status-danger")
+    delta_sign    = "+" if site_totals["energy_delta_kwh"] >= 0 else ""
 
+    # ── Logo ──────────────────────────────────────────────────────────────────
+    logo_img = (f'<img src="{logo_b64}" alt="Dolfines" />'
+                if logo_b64 else "")
+
+    # ── CSS (plain string – no f-string so CSS braces need no escaping) ───────
     css = """
-    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Open Sans', Arial, sans-serif; font-size: 9pt; color: #1a1a2e;
-           background: white; }
-    @page { size: A4; margin: 12mm 14mm 14mm 14mm; }
-    .page { page-break-after: always; min-height: 257mm; }
-    .page:last-child { page-break-after: auto; }
-    .header { display: flex; align-items: center; justify-content: space-between;
-               border-bottom: 2px solid #003D6B; padding-bottom: 6px; margin-bottom: 10px; }
-    .header-left { display: flex; align-items: center; gap: 14px; }
-    .header-site { font-size: 11pt; font-weight: 700; color: #003D6B; letter-spacing: 0.05em;
-                    text-transform: uppercase; }
-    .header-sub { font-size: 8pt; color: #666; }
-    .header-right { font-size: 7.5pt; color: #888; text-align: right; }
-    .section-title { font-size: 10.5pt; font-weight: 700; color: #003D6B;
-                      border-left: 4px solid #F07820; padding-left: 8px; margin: 10px 0 6px 0; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
-    .kpi-card { background: #f5f8fc; border: 1px solid #dce6f0; border-radius: 6px;
-                 padding: 8px 10px; text-align: center; }
-    .kpi-label { font-size: 7pt; color: #555; font-weight: 600; text-transform: uppercase;
-                  letter-spacing: 0.04em; margin-bottom: 3px; }
-    .kpi-value { font-size: 14pt; font-weight: 700; line-height: 1.1; }
-    .kpi-sub { font-size: 6.5pt; color: #888; margin-top: 2px; }
-    .chart-card { border: 1px solid #dce6f0; border-radius: 6px; padding: 6px;
-                   margin-bottom: 8px; background: #fafcff; }
-    .chart-card img { width: 100%; height: auto; display: block; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .cover-page { background: linear-gradient(135deg, #001a3a 0%, #003366 60%, #0a4d8c 100%);
-                   color: white; display: flex; flex-direction: column;
-                   justify-content: center; align-items: center; text-align: center;
-                   min-height: 257mm; }
-    .cover-logo { margin-bottom: 30px; }
-    .cover-title { font-size: 22pt; font-weight: 700; letter-spacing: 0.06em;
-                    text-transform: uppercase; margin-bottom: 8px; }
-    .cover-subtitle { font-size: 13pt; color: rgba(255,255,255,0.75); margin-bottom: 24px; }
-    .cover-date { font-size: 15pt; font-weight: 600; color: #F07820; margin-bottom: 8px; }
-    .cover-site { font-size: 10pt; color: rgba(255,255,255,0.60); }
-    .cover-badge { display: inline-block; background: #F07820; color: white;
-                    padding: 4px 16px; border-radius: 20px; font-size: 9pt;
-                    font-weight: 700; margin-top: 30px; }
-    .footer { border-top: 1px solid #dce6f0; padding-top: 4px; margin-top: 8px;
-               font-size: 6.5pt; color: #aaa; display: flex;
-               justify-content: space-between; }
-    """
+:root {
+  --c-pri:  #003D6B;
+  --c-acc:  #F07820;
+  --c-sec:  #3E516C;
+  --c-txt:  #1F2933;
+  --c-mut:  #6B7785;
+  --c-bg:   #F4F6F8;
+  --c-bdr:  #D9E0E6;
+  --c-ok:   #70AD47;
+  --c-warn: #C98A00;
+  --c-err:  #C62828;
+  --font:   Aptos, Calibri, Arial, Helvetica, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); font-size: 9pt; color: var(--c-txt); background: #fff; }
+@page { size: A4; margin: 0; }
+.page { position: relative; min-height: 257mm; background: #fff;
+        page-break-after: always; display: flex; flex-direction: column; }
+.page:last-child { page-break-after: auto; }
 
-    def page_header(title: str) -> str:
-        return f"""
-        <div class="header">
-          <div class="header-left">
-            {logo_html}
-            <div>
-              <div class="header-site">{site_name}</div>
-              <div class="header-sub">{title}</div>
-            </div>
-          </div>
-          <div class="header-right">
-            Daily Report &nbsp;·&nbsp; {date_str}<br/>
-            Generated {gen_dt}
-          </div>
-        </div>"""
+/* ── Header ── */
+.header-shell { flex-shrink: 0; }
+.header-band {
+  background: var(--c-pri); display: flex; align-items: center;
+  justify-content: space-between; padding: 4mm 10mm;
+}
+.header-band img { max-height: 20mm; width: auto; }
+.header-copy { text-align: right; }
+.header-site { font-size: 11pt; font-weight: 700; color: #fff;
+               letter-spacing: .05em; text-transform: uppercase; }
+.header-company { font-size: 8pt; color: rgba(255,255,255,.70); margin-top: 2px; }
+.header-accent {
+  height: 4px; background: var(--c-acc); position: relative; overflow: hidden;
+}
+.header-accent::after {
+  content: ''; position: absolute; right: 0; top: 0;
+  border-top: 4px solid var(--c-pri); border-left: 18px solid transparent;
+}
 
-    def page_footer(page_num: int, total: int = 6) -> str:
-        return f"""
-        <div class="footer">
-          <span>PVPAT — Daily Performance Report &nbsp;·&nbsp; {site_name}</span>
-          <span>CONFIDENTIAL — Dolfines</span>
-          <span>Page {page_num} of {total}</span>
-        </div>"""
+/* ── Cover ── */
+.cover-page { min-height: 257mm; background: #fff;
+              page-break-after: always; display: flex; flex-direction: column; }
+.cover-band {
+  background: var(--c-pri); display: flex; align-items: center;
+  justify-content: space-between; padding: 4mm 10mm;
+}
+.cover-band img { max-height: 20mm; width: auto; }
+.cover-logo { max-height: 20mm; width: auto; }
+.cover-accent {
+  height: 4px; background: var(--c-acc); position: relative; overflow: hidden;
+}
+.cover-accent::after {
+  content: ''; position: absolute; right: 0; top: 0;
+  border-top: 4px solid var(--c-pri); border-left: 18px solid transparent;
+}
+.cover-body { padding: 8mm 10mm 10mm; flex: 1; display: flex; flex-direction: column;
+              justify-content: center; }
+.cover-panel {
+  border: 2.5px solid var(--c-acc); border-radius: 10px; padding: 7mm 8mm;
+}
+.cover-panel h1 { font-size: 18pt; font-weight: 700; color: var(--c-pri);
+                  margin-bottom: 4px; }
+.cover-subtitle { font-size: 10pt; color: var(--c-mut); margin-bottom: 6mm; }
+.cover-metadata { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 6mm;
+                  font-size: 8.5pt; }
+.cover-metadata dt { color: var(--c-mut); font-weight: 600; text-transform: uppercase;
+                     font-size: 7pt; letter-spacing: .06em; }
+.cover-metadata dd { color: var(--c-txt); font-weight: 600; margin-top: 1px; }
 
-    # ── PAGE 1: COVER ────────────────────────────────────────────────────────
-    p1 = f"""
-    <div class="page cover-page">
-      <div class="cover-logo">{logo_html}</div>
-      <div class="cover-title">Daily Performance Report</div>
-      <div class="cover-subtitle">{site_name}</div>
-      <div class="cover-date">{date_str}</div>
-      <div class="cover-site">
-        {site_cfg.get('technology','—')} &nbsp;·&nbsp;
-        {cap_dc:.0f} kWp DC &nbsp;/&nbsp; {cap_ac:.0f} kW AC<br/>
-        {site_cfg.get('n_inverters','—')} × {site_cfg.get('inverter_model','—')}
+/* ── Page content ── */
+.page-content { padding: 0 10mm 8mm; flex: 1; display: flex; flex-direction: column; }
+
+/* ── Section heading ── */
+.section-heading { margin-bottom: 3mm; }
+.section-heading h2 { font-size: 14pt; font-weight: 700; color: var(--c-pri);
+                      margin-bottom: 2px; }
+.section-summary { font-size: 9pt; color: var(--c-mut); }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 7.5pt;
+           color: var(--c-sec); margin-bottom: 3px; }
+
+/* ── KPI cards ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr);
+            gap: 2.5mm; margin-bottom: 3mm; }
+.kpi-grid.g3 { grid-template-columns: repeat(3, 1fr); }
+.kpi-card { background: var(--c-bg); padding: 2.5mm 3mm;
+            border: 1px solid var(--c-bdr); border-radius: 8px; }
+.kpi-label { font-size: 7pt; text-transform: uppercase; letter-spacing: .04em;
+             color: var(--c-mut); font-weight: 600; margin-bottom: 2px; }
+.kpi-value { font-size: 15pt; font-weight: 700; color: var(--c-pri);
+             line-height: 1.1; }
+.kpi-subtext, .kpi-target { font-size: 7pt; color: var(--c-mut); margin-top: 1px; }
+.status-success .kpi-value { color: var(--c-ok); }
+.status-warning .kpi-value { color: var(--c-warn); }
+.status-danger  .kpi-value { color: var(--c-err); }
+.status-info    .kpi-value { color: var(--c-sec); }
+
+/* ── Commentary card ── */
+.commentary-card {
+  background: linear-gradient(180deg, #fbfcfd, #f6f8fa);
+  border-left: 3px solid var(--c-acc); padding: 3mm 3.5mm;
+  margin-bottom: 3mm; border: 1px solid var(--c-bdr);
+  border-radius: 8px; break-inside: avoid;
+}
+.commentary-card h3 { font-size: 9.5pt; font-weight: 700; color: var(--c-pri);
+                       margin-bottom: 3px; }
+.commentary-card p { font-size: 8.5pt; color: var(--c-txt); line-height: 1.5;
+                     margin-top: 3px; }
+
+/* ── Figure cards ── */
+.figure-grid { display: grid; grid-template-columns: repeat(2, 1fr);
+               gap: 2.5mm; margin-bottom: 3mm; }
+.figure-card { border: 1px solid var(--c-bdr); border-radius: 8px;
+               padding: 2.5mm; break-inside: avoid; }
+.figure-card img { width: 100%; height: auto; max-height: 86mm;
+                   object-fit: contain; display: block; }
+.figure-card.full { grid-column: 1 / -1; }
+.figure-card.full img { max-height: 112mm; }
+.figure-card.half img { max-height: 72mm; }
+figcaption { font-size: 7.5pt; color: var(--c-mut); margin-top: 4px; }
+
+/* ── Table card ── */
+.table-card { border: 1px solid var(--c-bdr); border-radius: 8px;
+              padding: 2.8mm; break-inside: avoid; margin-bottom: 3mm; }
+.table-card-header { margin-bottom: 2.5mm; }
+.table-card-header h3 { font-size: 10pt; font-weight: 700; color: var(--c-pri); }
+.report-table { width: 100%; border-collapse: collapse; }
+.report-table th,
+.report-table td { border-top: 1px solid var(--c-bdr); padding: 4px 5px;
+                   font-size: 7.8pt; text-align: left; vertical-align: top; }
+.report-table thead th { background: var(--c-bg); color: var(--c-pri);
+                          font-weight: 700; border-top: none; }
+.row-danger td  { background: #fdecea; }
+.row-warning td { background: #fff5e6; }
+.row-success td { background: #edf7e9; }
+
+/* ── Findings card ── */
+.findings-card { border: 1px solid var(--c-bdr); border-radius: 8px;
+                 padding: 2.8mm; margin-bottom: 3mm; }
+.findings-list { display: grid; gap: 2.5mm; margin-top: 2.5mm; }
+.finding { border-left: 3px solid var(--c-bdr);
+           padding: 1.5mm 0 1.5mm 2.5mm; }
+.finding-danger  { border-left-color: var(--c-err); }
+.finding-warning { border-left-color: var(--c-warn); }
+.finding-info    { border-left-color: var(--c-sec); }
+.finding h4 { font-size: 8.5pt; font-weight: 700; color: var(--c-txt);
+              margin-bottom: 2px; }
+.finding p  { font-size: 8pt; color: var(--c-txt); line-height: 1.45; }
+
+/* ── Two-column layout ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+
+/* ── Footer ── */
+.page-footer {
+  border-top: 1px solid var(--c-bdr); padding: 3mm 0 0;
+  display: flex; justify-content: space-between;
+  font-size: 7pt; color: var(--c-mut); margin-top: auto;
+}
+"""
+
+    # ── Shared header / footer builders ──────────────────────────────────────
+    def page_header(sub: str) -> str:
+        return f"""<div class="header-shell">
+  <div class="header-band">
+    {logo_img}
+    <div class="header-copy">
+      <p class="header-site">{site_name}</p>
+      <p class="header-company">Daily Performance Report · {date_str}</p>
+    </div>
+  </div>
+  <div class="header-accent"></div>
+</div>"""
+
+    def page_footer(n: int, total: int = 6) -> str:
+        return f"""<div class="page-footer">
+  <span>PVPAT — Daily Performance Report · {site_name}</span>
+  <span>CONFIDENTIAL — Dolfines</span>
+  <span>Page {n} of {total}</span>
+</div>"""
+
+    # ── PAGE 1: COVER ─────────────────────────────────────────────────────────
+    p1 = f"""<section class="page cover-page">
+  <div class="cover-band">
+    {logo_img}
+    <div class="header-copy">
+      <p class="header-site">{site_name}</p>
+      <p class="header-company">Dolfines</p>
+    </div>
+  </div>
+  <div class="cover-accent"></div>
+  <div class="cover-body">
+    <div class="cover-panel">
+      <p class="eyebrow">Daily Performance Report</p>
+      <h1>{site_name} — Daily Performance Report</h1>
+      <p class="cover-subtitle">Automated SCADA-based daily performance analysis</p>
+      <dl class="cover-metadata">
+        <div><dt>Report date</dt><dd>{date_str}</dd></div>
+        <div><dt>Asset</dt><dd>{cap_dc:.0f} kWp DC / {cap_ac:.0f} kW AC</dd></div>
+        <div><dt>Technology</dt><dd>{site_cfg.get('technology', '—')}</dd></div>
+        <div><dt>Inverters</dt><dd>{site_cfg.get('n_inverters', '—')} × {site_cfg.get('inverter_model', '—')}</dd></div>
+        <div><dt>Generated</dt><dd>{gen_dt}</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>"""
+
+    # ── PAGE 2: DAILY KPIs + IRRADIANCE ──────────────────────────────────────
+    pr_cls    = pr_status(site_totals["pr_pct"])
+    avail_cls = avail_status(site_totals["availability_pct"])
+
+    p2 = f"""<section class="page standard-page page-daily-kpis">
+  {page_header("Daily Summary")}
+  <div class="page-content">
+    <div class="section-heading" style="margin-top:3mm;">
+      <p class="eyebrow">Daily Summary</p>
+      <h2>Daily Key Performance Indicators</h2>
+      <p class="section-summary">Site-level KPIs for {date_str}.</p>
+    </div>
+
+    <div class="kpi-grid">
+      <article class="kpi-card status-info">
+        <p class="kpi-label">Total Energy</p>
+        <p class="kpi-value">{site_totals["total_energy_kwh"]:,.0f}</p>
+        <p class="kpi-subtext">kWh</p>
+      </article>
+      <article class="kpi-card status-info">
+        <p class="kpi-label">Specific Yield</p>
+        <p class="kpi-value">{site_totals["spec_yield"]:.3f}</p>
+        <p class="kpi-subtext">kWh/kWp</p>
+      </article>
+      <article class="kpi-card {pr_cls}">
+        <p class="kpi-label">Performance Ratio</p>
+        <p class="kpi-value">{site_totals["pr_pct"]:.1f}%</p>
+        <p class="kpi-subtext">Target {site_totals["pr_target_pct"]:.0f}%</p>
+      </article>
+      <article class="kpi-card {avail_cls}">
+        <p class="kpi-label">Fleet Availability</p>
+        <p class="kpi-value">{site_totals["availability_pct"]:.1f}%</p>
+        <p class="kpi-subtext">daylight hours</p>
+      </article>
+      <article class="kpi-card {alerts_status}">
+        <p class="kpi-label">Alerts</p>
+        <p class="kpi-value" style="font-size:11pt;">{alert_summary}</p>
+        <p class="kpi-subtext">today</p>
+      </article>
+    </div>
+
+    <div class="kpi-grid g3">
+      <article class="kpi-card status-info">
+        <p class="kpi-label">Insolation</p>
+        <p class="kpi-value">{irradiance["insolation_kwh_m2"]:.2f}</p>
+        <p class="kpi-subtext">kWh/m²</p>
+      </article>
+      <article class="kpi-card status-info">
+        <p class="kpi-label">Peak GHI</p>
+        <p class="kpi-value">{irradiance["peak_ghi"]:.0f}</p>
+        <p class="kpi-subtext">W/m²</p>
+      </article>
+      <article class="kpi-card {delta_status}">
+        <p class="kpi-label">Energy vs Expected</p>
+        <p class="kpi-value">{delta_sign}{site_totals["energy_delta_kwh"]:,.0f}</p>
+        <p class="kpi-subtext">kWh vs target PR</p>
+      </article>
+    </div>
+
+    <section class="commentary-card">
+      <h3>Daily Overview</h3>
+      <p>Performance summary for {site_name} on {date_str}. The site recorded a
+      performance ratio of {site_totals["pr_pct"]:.1f}% against a target of
+      {site_totals["pr_target_pct"]:.0f}%, fleet availability of
+      {site_totals["availability_pct"]:.1f}%, and total AC energy output of
+      {site_totals["total_energy_kwh"]:,.0f} kWh from
+      {irradiance["insolation_kwh_m2"]:.2f} kWh/m² insolation.</p>
+    </section>
+
+    <div class="figure-grid">
+      <figure class="figure-card full">
+        <img src="{chart_irr}" alt="Irradiance profile" />
+        <figcaption>Figure 1 — Daily GHI irradiance profile (W/m²) with AC power overlay.</figcaption>
+      </figure>
+    </div>
+
+    {page_footer(2)}
+  </div>
+</section>"""
+
+    # ── PAGE 3: PER-INVERTER YIELD & PR ──────────────────────────────────────
+    inv_table_rows = ""
+    for r in inv_rows:
+        row_cls = r.get("row_class", "")
+        inv_table_rows += f"""<tr class="{row_cls}">
+          <td style="font-weight:600;">{r["inverter"]}</td>
+          <td style="text-align:right;">{r["spec_yield"]}</td>
+          <td style="text-align:right;">{r["energy_kwh"]}</td>
+          <td style="text-align:right;">{r["pr_pct"]}</td>
+          <td style="text-align:right;">{r["avail_pct"]}</td>
+          <td style="text-align:right;">{r["peak_kw"]}</td>
+        </tr>"""
+
+    p3 = f"""<section class="page standard-page page-inverter-yield">
+  {page_header("Per-Inverter Analysis")}
+  <div class="page-content">
+    <div class="section-heading" style="margin-top:3mm;">
+      <p class="eyebrow">Per-Inverter Analysis</p>
+      <h2>Specific Yield &amp; Performance Ratio</h2>
+      <p class="section-summary">Inverter-level yield and PR breakdown for {date_str}.</p>
+    </div>
+
+    <section class="table-card">
+      <div class="table-card-header">
+        <h3>Inverter Summary Table</h3>
       </div>
-      <div class="cover-badge">PVPAT Platform &nbsp;·&nbsp; Dolfines</div>
-    </div>"""
-
-    # ── PAGE 2: DAILY KPIs + IRRADIANCE ─────────────────────────────────────
-    pr_col    = pr_color(site_totals["pr_pct"])
-    avail_col = avail_color(site_totals["availability_pct"])
-
-    p2 = f"""
-    <div class="page">
-      {page_header("Daily Summary & Irradiance")}
-
-      <div class="section-title">Daily Key Performance Indicators</div>
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">Total Energy</div>
-          <div class="kpi-value" style="color:#003D6B;">{site_totals["total_energy_kwh"]:,.0f}</div>
-          <div class="kpi-sub">kWh</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Specific Yield</div>
-          <div class="kpi-value" style="color:#003D6B;">{site_totals["spec_yield"]:.3f}</div>
-          <div class="kpi-sub">kWh/kWp</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Performance Ratio</div>
-          <div class="kpi-value" style="color:{pr_col};">{site_totals["pr_pct"]:.1f}%</div>
-          <div class="kpi-sub">Target {site_totals["pr_target_pct"]:.0f}%</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Fleet Availability</div>
-          <div class="kpi-value" style="color:{avail_col};">{site_totals["availability_pct"]:.1f}%</div>
-          <div class="kpi-sub">daylight hours</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Alerts</div>
-          <div class="kpi-value" style="color:{'#C0392B' if high_count else '#E67E22' if medium_count else '#2E8B57'};font-size:11pt;">
-            {alert_summary}
-          </div>
-          <div class="kpi-sub">today</div>
-        </div>
-      </div>
-
-      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi-card">
-          <div class="kpi-label">Insolation</div>
-          <div class="kpi-value" style="color:#003D6B;">{irradiance["insolation_kwh_m2"]:.2f}</div>
-          <div class="kpi-sub">kWh/m²</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Peak GHI</div>
-          <div class="kpi-value" style="color:#003D6B;">{irradiance["peak_ghi"]:.0f}</div>
-          <div class="kpi-sub">W/m²</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Energy vs Expected</div>
-          <div class="kpi-value" style="color:{'#2E8B57' if site_totals['energy_delta_kwh'] >= 0 else '#C0392B'};">
-            {'+' if site_totals['energy_delta_kwh'] >= 0 else ''}{site_totals['energy_delta_kwh']:,.0f}
-          </div>
-          <div class="kpi-sub">kWh vs target PR</div>
-        </div>
-      </div>
-
-      <div class="section-title">Daily Irradiance Profile</div>
-      <div class="chart-card"><img src="{chart_irr}" /></div>
-
-      {page_footer(2)}
-    </div>"""
-
-    # ── PAGE 3: PER-INVERTER YIELD & PR ─────────────────────────────────────
-    p3 = f"""
-    <div class="page">
-      {page_header("Per-Inverter Specific Yield & Performance Ratio")}
-
-      <div class="section-title">Per-Inverter Metrics Summary</div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <table class="report-table">
         <thead>
-          <tr style="background:#003D6B;color:white;">
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:left;">Inverter</th>
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:right;">Spec. Yield (kWh/kWp)</th>
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:right;">Energy (kWh)</th>
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:right;">PR (%)</th>
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:right;">Availability</th>
-            <th style="padding:4px 6px;font-size:7.5pt;text-align:right;">Peak (kW)</th>
+          <tr>
+            <th>Inverter</th>
+            <th style="text-align:right;">Spec. Yield (kWh/kWp)</th>
+            <th style="text-align:right;">Energy (kWh)</th>
+            <th style="text-align:right;">PR (%)</th>
+            <th style="text-align:right;">Availability</th>
+            <th style="text-align:right;">Peak (kW)</th>
           </tr>
         </thead>
         <tbody>{inv_table_rows}</tbody>
       </table>
+    </section>
 
-      <div class="two-col">
-        <div>
-          <div class="section-title" style="font-size:9pt;">Specific Yield</div>
-          <div class="chart-card"><img src="{chart_yield}" /></div>
-        </div>
-        <div>
-          <div class="section-title" style="font-size:9pt;">Performance Ratio</div>
-          <div class="chart-card"><img src="{chart_pr}" /></div>
-        </div>
+    <div class="figure-grid">
+      <figure class="figure-card half">
+        <img src="{chart_yield}" alt="Specific yield per inverter" />
+        <figcaption>Figure 2 — Specific yield (kWh/kWp) per inverter.</figcaption>
+      </figure>
+      <figure class="figure-card half">
+        <img src="{chart_pr}" alt="Performance ratio per inverter" />
+        <figcaption>Figure 3 — Performance ratio (%) per inverter vs fleet target.</figcaption>
+      </figure>
+    </div>
+
+    {page_footer(3)}
+  </div>
+</section>"""
+
+    # ── PAGE 4: AVAILABILITY ──────────────────────────────────────────────────
+    p4 = f"""<section class="page standard-page page-availability">
+  {page_header("Per-Inverter Availability")}
+  <div class="page-content">
+    <div class="section-heading" style="margin-top:3mm;">
+      <p class="eyebrow">Availability Analysis</p>
+      <h2>Per-Inverter Availability</h2>
+      <p class="section-summary">Fraction of daylight intervals each inverter was operational.</p>
+    </div>
+
+    <section class="commentary-card">
+      <h3>Availability Methodology</h3>
+      <p>Availability is computed as the fraction of 10-minute intervals during daylight hours
+      (GHI &gt; {site_cfg["irr_threshold"]:.0f} W/m²) where measured AC power exceeded the
+      {site_cfg["power_threshold"]:.0f} kW detection threshold. Inverters with zero availability
+      were offline for the full day and require immediate investigation.</p>
+    </section>
+
+    <div class="figure-grid">
+      <figure class="figure-card full">
+        <img src="{chart_avail}" alt="Inverter availability chart" />
+        <figcaption>Figure 4 — Per-inverter availability (%) during daylight hours.</figcaption>
+      </figure>
+    </div>
+
+    {page_footer(4)}
+  </div>
+</section>"""
+
+    # ── PAGE 5: WATERFALL + ALERTS ────────────────────────────────────────────
+    if alerts:
+        findings_items = ""
+        for a in alerts:
+            sev = a["severity"]
+            finding_cls = ("finding-danger"  if sev == "HIGH"
+                           else "finding-warning" if sev == "MEDIUM"
+                           else "finding-info")
+            findings_items += f"""<article class="finding {finding_cls}">
+          <h4>{a["inverter"]} — {a["description"]}</h4>
+          <p><strong>Likely cause:</strong> {a["likely_cause"]}. <strong>Action:</strong> {a["recommended_action"]}.</p>
+        </article>"""
+        alerts_block = f"""<section class="findings-card">
+      <div class="table-card-header"><h3>Alerts &amp; Alarms</h3></div>
+      <div class="findings-list">
+        {findings_items}
       </div>
+    </section>"""
+    else:
+        alerts_block = """<section class="commentary-card">
+      <h3>Alerts &amp; Alarms</h3>
+      <p>No alerts detected for this reporting period. All inverters operated within expected parameters.</p>
+    </section>"""
 
-      {page_footer(3)}
-    </div>"""
+    p5 = f"""<section class="page standard-page page-waterfall">
+  {page_header("Energy Losses")}
+  <div class="page-content">
+    <div class="section-heading" style="margin-top:3mm;">
+      <p class="eyebrow">Energy Losses</p>
+      <h2>Daily Energy Loss Waterfall</h2>
+      <p class="section-summary">Decomposition of theoretical energy into successive loss categories.</p>
+    </div>
 
-    # ── PAGE 4: AVAILABILITY ────────────────────────────────────────────────
-    p4 = f"""
-    <div class="page">
-      {page_header("Per-Inverter Availability")}
+    <section class="commentary-card">
+      <h3>Waterfall Interpretation</h3>
+      <p>The waterfall decomposes the theoretical energy (GHI × DC capacity) into successive
+      loss categories down to the measured AC output. Curtailment &amp; downtime represents
+      residual losses beyond the design optical/thermal budget.</p>
+    </section>
 
-      <div class="section-title">Inverter Availability — Daylight Hours</div>
-      <p style="font-size:8pt;color:#444;margin-bottom:8px;line-height:1.45;">
-        Availability is computed as the fraction of 10-minute intervals (during daylight hours,
-        GHI &gt; {site_cfg["irr_threshold"]:.0f} W/m²) where measured AC power exceeded the
-        {site_cfg["power_threshold"]:.0f} kW detection threshold. Inverters with zero availability
-        were offline for the full day and require immediate investigation.
-      </p>
+    <div class="figure-grid">
+      <figure class="figure-card full">
+        <img src="{chart_wfall}" alt="Energy loss waterfall" />
+        <figcaption>Figure 5 — Daily energy loss waterfall (kWh).</figcaption>
+      </figure>
+    </div>
 
-      <div class="chart-card"><img src="{chart_avail}" /></div>
+    {alerts_block}
 
-      {page_footer(4)}
-    </div>"""
+    {page_footer(5)}
+  </div>
+</section>"""
 
-    # ── PAGE 5: WATERFALL + ALERTS ──────────────────────────────────────────
-    p5 = f"""
-    <div class="page">
-      {page_header("Energy Waterfall & Alerts")}
-
-      <div class="section-title">Daily Energy Loss Waterfall</div>
-      <p style="font-size:8pt;color:#444;margin-bottom:6px;line-height:1.45;">
-        The waterfall decomposes the theoretical energy (GHI × DC capacity) into successive
-        loss categories down to the measured AC output.  Curtailment &amp; downtime represents
-        residual losses beyond the design optical/thermal budget.
-      </p>
-      <div class="chart-card"><img src="{chart_wfall}" /></div>
-
-      <div class="section-title">Alerts &amp; Alarms</div>
-      {alerts_html}
-
-      {page_footer(5)}
-    </div>"""
-
-    # ── PAGE 6: COMMENTARY + DATA QUALITY TABLE ──────────────────────────────
-    commentary_html = ""
+    # ── PAGE 6: COMMENTARY + DATA QUALITY ─────────────────────────────────────
     if commentary:
-        items_html = "".join(
-            f"<li style='margin-bottom:5px;line-height:1.5;'>{c}</li>"
-            for c in commentary
-        )
-        commentary_html = f"""
-        <div class="section-title">Automated Interpretation</div>
-        <ul style="font-size:8.5pt;color:#333;padding-left:18px;margin-bottom:12px;">
-          {items_html}
-        </ul>"""
+        commentary_paras = "".join(f"<p>{c}</p>" for c in commentary)
+        commentary_block = f"""<section class="commentary-card">
+      <h3>Automated Interpretation</h3>
+      {commentary_paras}
+    </section>"""
+    else:
+        commentary_block = """<section class="commentary-card">
+      <h3>Automated Interpretation</h3>
+      <p>No automated commentary available for this reporting period.</p>
+    </section>"""
 
-    dq_rows_html = ""
     if data_quality:
+        dq_rows_html = ""
         for row in data_quality:
             analysis, (status_text, status_color), _, impact, remedy = row
-            dq_rows_html += f"""
-            <tr>
-              <td style="padding:4px 8px;font-size:8pt;">{analysis}</td>
-              <td style="padding:4px 8px;font-size:8pt;font-weight:700;color:{status_color};">{status_text}</td>
-              <td style="padding:4px 8px;font-size:8pt;color:#555;">{impact}</td>
-              <td style="padding:4px 8px;font-size:8pt;color:#777;">{remedy}</td>
-            </tr>"""
+            dq_rows_html += f"""<tr>
+          <td>{analysis}</td>
+          <td style="font-weight:700;color:{status_color};">{status_text}</td>
+          <td>{impact}</td>
+          <td>{remedy}</td>
+        </tr>"""
+        dq_block = f"""<section class="table-card">
+      <div class="table-card-header">
+        <h3>Analysis Capability Summary</h3>
+      </div>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Analysis</th>
+            <th>Status</th>
+            <th>Impact on Report</th>
+            <th>To Unlock</th>
+          </tr>
+        </thead>
+        <tbody>{dq_rows_html}</tbody>
+      </table>
+    </section>"""
+    else:
+        dq_block = ""
 
-    dq_table_html = f"""
-        <div class="section-title">Analysis Capability Summary</div>
-        <p style="font-size:8pt;color:#444;margin-bottom:6px;">
-          This table shows which analyses were possible given the data available
-          for this report, and what data would be needed to unlock missing analyses.
-        </p>
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="background:#003D6B;color:white;">
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Analysis</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Status</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Impact on Report</th>
-              <th style="padding:5px 8px;font-size:8pt;text-align:left;">To Unlock</th>
-            </tr>
-          </thead>
-          <tbody>{dq_rows_html}</tbody>
-        </table>""" if data_quality else ""
+    p6 = f"""<section class="page standard-page page-commentary">
+  {page_header("Interpretation")}
+  <div class="page-content">
+    <div class="section-heading" style="margin-top:3mm;">
+      <p class="eyebrow">Interpretation</p>
+      <h2>Commentary &amp; Analysis Capability</h2>
+      <p class="section-summary">Automated interpretation and data quality assessment.</p>
+    </div>
 
-    p6 = f"""
-    <div class="page">
-      {page_header("Commentary & Data Quality")}
-      {commentary_html}
-      {dq_table_html}
-      {page_footer(6)}
-    </div>"""
+    {commentary_block}
+
+    {dq_block}
+
+    {page_footer(6)}
+  </div>
+</section>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
