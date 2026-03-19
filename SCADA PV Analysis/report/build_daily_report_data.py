@@ -85,10 +85,19 @@ def build_daily_report(
     chart_pr     = _b64_png(chart_per_inverter_pr(per_inv, pr_target))
     chart_wfall  = _b64_png(chart_daily_waterfall(waterfall))
 
-    # ── 3. Logo ─────────────────────────────────────────────────────────────
+    # ── 3. Logo & cover image ────────────────────────────────────────────────
     logo_b64 = _b64_file(_ROOT / "dolfines_logo_white.png")
     if not logo_b64:
         logo_b64 = _b64_file(_ROOT / "8p2_logo_white.png")  # fallback
+
+    # Cover hero image — try several candidate files
+    cover_img_b64 = ""
+    for _img in ("bg_solar.jpg", "00orig/solar_farm_2.jpg",
+                 "00orig/solar_farm.jpg", "france.jpg"):
+        _p = _ROOT / _img
+        if _p.exists():
+            cover_img_b64 = _b64_file(_p, mime="image/jpeg")
+            break
 
     # ── 4. Alerts table rows ─────────────────────────────────────────────────
     severity_class = {"HIGH": "row-danger", "MEDIUM": "row-warning", "INFO": ""}
@@ -119,9 +128,10 @@ def build_daily_report(
                                         site_cfg, results)
 
     html = _render_html(
-        site_cfg    = site_cfg,
-        report_date = report_date,
-        logo_b64    = logo_b64,
+        site_cfg       = site_cfg,
+        report_date    = report_date,
+        logo_b64       = logo_b64,
+        cover_img_b64  = cover_img_b64,
         irradiance  = irradiance,
         site_totals = site_totals,
         inv_rows    = inv_rows,
@@ -414,7 +424,7 @@ def _build_data_quality(has_real_inv, has_irr, site_cfg, results):
 # HTML RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
+def _render_html(*, site_cfg, report_date, logo_b64, cover_img_b64="", irradiance, site_totals,
                  inv_rows, alerts, severity_class, chart_irr, chart_yield,
                  chart_avail, chart_pr, chart_wfall, waterfall,
                  commentary=None, data_quality=None) -> str:
@@ -475,7 +485,7 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
   --font:   Aptos, Calibri, Arial, Helvetica, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); font-size: 9pt; color: var(--c-txt); background: #fff; }
+body { font-family: var(--font, Arial, sans-serif); font-size: 9pt; color: var(--c-txt, #1F2933); background: #fff; }
 @page { size: A4; margin: 0; }
 .page { position: relative; min-height: 297mm; background: #fff;
         page-break-after: always; display: flex; flex-direction: column; }
@@ -517,7 +527,11 @@ body { font-family: var(--font); font-size: 9pt; color: var(--c-txt); background
   border-top: 4px solid var(--c-pri); border-left: 18px solid transparent;
 }
 .cover-body { padding: 8mm 10mm 10mm; flex: 1; display: flex; flex-direction: column;
-              justify-content: center; }
+              justify-content: flex-start; }
+.cover-hero { width: 100%; height: 90mm; border-radius: 10px; overflow: hidden;
+              border: 1px solid var(--c-bdr); margin-bottom: 8mm;
+              background: linear-gradient(135deg, rgba(0,61,107,0.14), rgba(62,81,108,0.08)); }
+.cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-panel {
   border: 2.5px solid var(--c-acc); border-radius: 10px; padding: 7mm 8mm;
 }
@@ -651,6 +665,7 @@ figcaption { font-size: 7.5pt; color: var(--c-mut); margin-top: 4px; }
   </div>
   <div class="cover-accent"></div>
   <div class="cover-body">
+    {f'<div class="cover-hero"><img src="{cover_img_b64}" alt="Solar farm" /></div>' if cover_img_b64 else ''}
     <div class="cover-panel">
       <p class="eyebrow">Daily Performance Report</p>
       <h1>{site_name} — Daily Performance Report</h1>
