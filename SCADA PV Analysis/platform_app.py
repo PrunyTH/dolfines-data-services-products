@@ -33,8 +33,8 @@ def _ensure_playwright() -> bool:
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR   = Path(__file__).parent
-LOGO_PATH    = SCRIPT_DIR / "8p2_logo_white.png"
-FAVICON_PATH = SCRIPT_DIR / "8p2_favicon_sq.jpg"
+LOGO_PATH    = SCRIPT_DIR / "dolfines_logo_white.png"
+FAVICON_PATH = SCRIPT_DIR / "dolfines_favicon.png"
 BG_PATH      = SCRIPT_DIR / "bg_solar.jpg"
 BG_WIND_PATH = SCRIPT_DIR / "bg_wind.jpg"
 
@@ -45,7 +45,7 @@ from platform_users import USERS, SITES, PRICING
 # ── Page config ────────────────────────────────────────────────────────────
 _fav = Image.open(FAVICON_PATH) if FAVICON_PATH.exists() else "☀️"
 st.set_page_config(
-    page_title="PVPAT Platform | 8p2 Advisory",
+    page_title="PVPAT Platform | Dolfines",
     page_icon=_fav,
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -276,7 +276,7 @@ _STANDARD_NAMES = {
 
 # Roles that are optional (skipping does not block generation)
 _ROLE_OPTIONAL = {
-    "solar": {"irradiance"},
+    "solar": set(),
     "wind":  {"wind_dir", "availability"},
 }
 
@@ -470,31 +470,52 @@ def _show_column_mapper(files, site_type="solar", state_key="col_maps"):
 def _normalise_files(mapped_result, site_type="solar") -> list:
     """
     Given output of _show_column_mapper, return list of (filename, normalised_df).
-    - Multi roles (power): selected columns are summed into the standard name.
-    - Single roles: column is renamed to the standard name.
-    - Missing optional roles are silently skipped.
+
+    For solar with multi-select power columns:
+      - Outputs a long-format inverter CSV: Time_UDT, EQUIP, PAC
+        (each selected power column becomes rows with EQUIP = column name)
+      - Outputs a separate irradiance CSV prefixed 'irradiance_': Time_UDT, GHI
+    This ensures _load_inverter_csv and _load_irradiance_csv both find their data.
     """
     import pandas as pd
-    std        = _STANDARD_NAMES.get(site_type, {})
     multi_roles = _ROLE_MULTI.get(site_type, set())
     out = []
+
     for fname, (df, mapping) in mapped_result.items():
-        series = {}
-        for role, std_name in std.items():
-            val = mapping.get(role)
-            if not val:
-                continue
-            if role in multi_roles:
-                # val is a list of column names — sum them numerically
-                valid = [c for c in val if c in df.columns]
-                if valid:
-                    series[std_name] = df[valid].apply(
-                        pd.to_numeric, errors="coerce").sum(axis=1)
+        base = fname.rsplit(".", 1)[0]
+        time_col  = mapping.get("time")
+        power_val = mapping.get("power")
+        irr_col   = mapping.get("irradiance")
+
+        time_series = df[time_col] if (time_col and time_col in df.columns) else None
+
+        # ── Inverter file (long format) ──────────────────────────────────────
+        if time_series is not None and power_val:
+            if isinstance(power_val, list):
+                power_cols = [c for c in power_val if c in df.columns]
             else:
-                if val in df.columns:
-                    series[std_name] = df[val]
-        if series:
-            out.append((fname, pd.DataFrame(series)))
+                power_cols = [power_val] if power_val in df.columns else []
+
+            if power_cols:
+                frames = []
+                for pcol in power_cols:
+                    tmp = pd.DataFrame({
+                        "Time_UDT": time_series.values,
+                        "EQUIP":    pcol,
+                        "PAC":      pd.to_numeric(df[pcol], errors="coerce").fillna(0.0).values,
+                    })
+                    frames.append(tmp)
+                inv_df = pd.concat(frames, ignore_index=True)
+                out.append((base + ".csv", inv_df))
+
+        # ── Irradiance file ──────────────────────────────────────────────────
+        if time_series is not None and irr_col and irr_col in df.columns:
+            irr_df = pd.DataFrame({
+                "Time_UDT": time_series.values,
+                "GHI":      pd.to_numeric(df[irr_col], errors="coerce").fillna(0.0).values,
+            })
+            out.append(("irradiance_" + base + ".csv", irr_df))
+
     return out
 
 

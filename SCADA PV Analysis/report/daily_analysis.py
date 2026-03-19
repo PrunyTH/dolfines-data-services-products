@@ -143,6 +143,7 @@ class DailyAnalysis:
             "site_totals":  site_totals,
             "waterfall":    waterfall,
             "alerts":       alerts,
+            "used_demo":    getattr(self, "_used_demo", False),
         }
         return self._results
 
@@ -195,10 +196,12 @@ class DailyAnalysis:
         pwr_threshold = self.cfg["power_threshold"]
         insolation    = irradiance["insolation_kwh_m2"]
 
+        self._used_demo = False
         records = []
 
         if inv_day.empty or "EQUIP" not in inv_day.columns or "PAC" not in inv_day.columns:
             # Return synthetic demo data if no real data available
+            self._used_demo = True
             return self._demo_per_inverter(insolation, pr_target, cap_ac_kw, cap_dc_kwp)
 
         inv_day = inv_day.copy()
@@ -245,6 +248,7 @@ class DailyAnalysis:
             })
 
         if not records:
+            self._used_demo = True
             return self._demo_per_inverter(insolation, pr_target, cap_ac_kw, cap_dc_kwp)
 
         df = pd.DataFrame(records).sort_values("inverter").reset_index(drop=True)

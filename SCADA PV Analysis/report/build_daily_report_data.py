@@ -67,6 +67,9 @@ def build_daily_report(
     analysis = DailyAnalysis(site_cfg, report_date, data_dir)
     results  = analysis.run()
 
+    has_real_inv  = not results.get("used_demo", False)
+    has_irr       = results["irradiance"]["insolation_kwh_m2"] > 0
+
     irradiance  = results["irradiance"]
     per_inv     = results["per_inverter"]
     site_totals = results["site_totals"]
@@ -83,7 +86,9 @@ def build_daily_report(
     chart_wfall  = _b64_png(chart_daily_waterfall(waterfall))
 
     # ── 3. Logo ─────────────────────────────────────────────────────────────
-    logo_b64 = _b64_file(_ROOT / "8p2_logo_white.png")
+    logo_b64 = _b64_file(_ROOT / "dolfines_logo_white.png")
+    if not logo_b64:
+        logo_b64 = _b64_file(_ROOT / "8p2_logo_white.png")  # fallback
 
     # ── 4. Alerts table rows ─────────────────────────────────────────────────
     severity_class = {"HIGH": "row-danger", "MEDIUM": "row-warning", "INFO": ""}
@@ -107,6 +112,12 @@ def build_daily_report(
         })
 
     # ── 6. Build HTML ────────────────────────────────────────────────────────
+    # ── Auto-commentary ──────────────────────────────────────────────────────
+    commentary = _build_commentary(site_cfg, site_totals, per_inv, irradiance,
+                                   alerts, has_real_inv, has_irr)
+    data_quality = _build_data_quality(has_real_inv, has_irr,
+                                        site_cfg, results)
+
     html = _render_html(
         site_cfg    = site_cfg,
         report_date = report_date,
@@ -122,6 +133,8 @@ def build_daily_report(
         chart_pr    = chart_pr,
         chart_wfall = chart_wfall,
         waterfall   = waterfall,
+        commentary  = commentary,
+        data_quality = data_quality,
     )
 
     # ── 7. Write HTML and convert to PDF ─────────────────────────────────────
@@ -150,12 +163,162 @@ def build_daily_report(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# COMMENTARY & DATA QUALITY HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_commentary(site_cfg, site_totals, per_inv, irradiance,
+                       alerts, has_real_inv, has_irr):
+    """Generate automatic interpretive text for the report."""
+    import pandas as pd
+    lines = []
+    pr_target = site_cfg["operating_pr_target"]
+    pr_pct    = site_totals["pr_pct"]
+    avail_pct = site_totals["availability_pct"]
+    energy    = site_totals["total_energy_kwh"]
+    delta     = site_totals["energy_delta_kwh"]
+    n_inv     = len(per_inv) if not per_inv.empty else 0
+
+    if not has_real_inv:
+        lines.append(
+            "<strong>Note:</strong> Per-inverter metrics are based on synthetic "
+            "demo data — no matching SCADA CSV was found for this date. "
+            "Upload real SCADA exports to see actual performance."
+        )
+
+    # Overall PR assessment
+    if pr_pct >= pr_target * 100 - 1:
+        lines.append(
+            f"<strong>Overall performance is on target.</strong> "
+            f"The site PR of <strong>{pr_pct:.1f}%</strong> is within 1 percentage point "
+            f"of the {pr_target*100:.0f}% operating target, indicating normal operation."
+        )
+    elif pr_pct >= pr_target * 100 - 5:
+        lines.append(
+            f"<strong>Performance is slightly below target.</strong> "
+            f"PR of {pr_pct:.1f}% is {pr_target*100 - pr_pct:.1f} pp below the "
+            f"{pr_target*100:.0f}% target. This is within the acceptable variance "
+            f"band and may reflect minor soiling or ambient temperature effects."
+        )
+    else:
+        lines.append(
+            f"<strong>Performance is significantly below target.</strong> "
+            f"PR of {pr_pct:.1f}% is {pr_target*100 - pr_pct:.1f} pp below the "
+            f"{pr_target*100:.0f}% target. Immediate investigation is recommended — "
+            f"check inverter fault logs and DC string health."
+        )
+
+    # Energy delta
+    if has_irr:
+        if delta < 0:
+            lines.append(
+                f"The site produced <strong>{abs(delta):,.0f} kWh less</strong> than "
+                f"expected at target PR ({site_totals['expected_energy_kwh']:,.0f} kWh expected, "
+                f"{energy:,.0f} kWh measured). This shortfall corresponds to "
+                f"approximately {abs(delta) / max(energy,1)*100:.1f}% of measured output."
+            )
+        else:
+            lines.append(
+                f"The site produced <strong>{delta:,.0f} kWh above</strong> the "
+                f"target-PR expectation ({site_totals['expected_energy_kwh']:,.0f} kWh expected, "
+                f"{energy:,.0f} kWh measured) — favourable conditions today."
+            )
+
+    # Availability commentary
+    offline = per_inv[per_inv["availability"] == 0] if not per_inv.empty else pd.DataFrame()
+    if not offline.empty:
+        names = ", ".join(offline["inverter"].tolist())
+        lines.append(
+            f"<strong>{len(offline)} inverter(s) were offline for the full day</strong> "
+            f"({names}). These units contributed zero energy and require urgent on-site "
+            f"inspection or remote restart attempt via the SCADA portal."
+        )
+    elif avail_pct < 95:
+        lines.append(
+            f"Fleet availability of {avail_pct:.1f}% indicates some downtime events "
+            f"during daylight hours. Review per-inverter fault logs to identify "
+            f"the root cause."
+        )
+    else:
+        lines.append(
+            f"Fleet availability is <strong>{avail_pct:.1f}%</strong> — all inverters "
+            f"operated throughout daylight hours."
+        )
+
+    # Irradiance commentary
+    if has_irr:
+        insol = irradiance["insolation_kwh_m2"]
+        peak  = irradiance["peak_ghi"]
+        if insol > 5.5:
+            lines.append(
+                f"Solar resource was strong today: insolation {insol:.2f} kWh/m², "
+                f"peak GHI {peak:.0f} W/m². High-irradiance days amplify any "
+                f"performance losses — PR deviations are more significant."
+            )
+        elif insol < 2.0:
+            lines.append(
+                f"Solar resource was low today (insolation {insol:.2f} kWh/m², "
+                f"peak GHI {peak:.0f} W/m²). Low-irradiance days can produce "
+                f"higher measurement uncertainty in PR calculations."
+            )
+        else:
+            lines.append(
+                f"Solar resource was moderate: insolation {insol:.2f} kWh/m², "
+                f"peak GHI {peak:.0f} W/m²."
+            )
+    else:
+        lines.append(
+            "No irradiance sensor data is available for this date. "
+            "PR and energy loss figures are estimated using a satellite irradiance "
+            "fallback — actual deviations may differ."
+        )
+
+    # High alerts summary
+    high_alerts = [a for a in alerts if a["severity"] == "HIGH"]
+    if high_alerts:
+        lines.append(
+            f"<strong>{len(high_alerts)} HIGH-severity alert(s)</strong> require "
+            f"immediate attention. Refer to the Alerts &amp; Alarms section for "
+            f"recommended corrective actions."
+        )
+
+    return lines
+
+
+def _build_data_quality(has_real_inv, has_irr, site_cfg, results):
+    """Build analysis capability table rows."""
+    rows = []
+    inv_status  = ("✓ Available", "#2E8B57") if has_real_inv else ("⚠ Demo data used", "#E67E22")
+    irr_status  = ("✓ Available", "#2E8B57") if has_irr    else ("✗ Not found",       "#C0392B")
+    rows.append(("Per-inverter power data",  inv_status[0], inv_status[1],
+                  "Energy, PR, specific yield per inverter",
+                  "SCADA CSV with EQUIP + PAC columns" if not has_real_inv else "—"))
+    rows.append(("Irradiance / GHI data",    irr_status[0], irr_status[1],
+                  "Insolation, PR calculation, waterfall losses",
+                  "Pyranometer CSV with GHI column" if not has_irr else "—"))
+    rows.append(("Performance Ratio",
+                  ("✓ Calculated", "#2E8B57") if has_irr and has_real_inv else ("⚠ Estimated", "#E67E22"),
+                  "#2E8B57" if has_irr and has_real_inv else "#E67E22",
+                  "Core KPI — energy quality metric", "—"))
+    rows.append(("Availability analysis",
+                  ("✓ Calculated", "#2E8B57") if has_real_inv else ("⚠ Demo data", "#E67E22"),
+                  "#2E8B57" if has_real_inv else "#E67E22",
+                  "Fraction of daylight hours producing power", "—"))
+    rows.append(("Energy loss waterfall",
+                  ("✓ Calculated", "#2E8B57") if has_irr else ("⚠ Estimated", "#E67E22"),
+                  "#2E8B57" if has_irr else "#E67E22",
+                  "Loss decomposition: optical, inverter, downtime",
+                  "Irradiance data needed for accurate losses" if not has_irr else "—"))
+    return rows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HTML RENDERER
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
                  inv_rows, alerts, severity_class, chart_irr, chart_yield,
-                 chart_avail, chart_pr, chart_wfall, waterfall) -> str:
+                 chart_avail, chart_pr, chart_wfall, waterfall,
+                 commentary=None, data_quality=None) -> str:
     """Inline HTML/CSS – no Jinja dependency for the daily report."""
 
     site_name   = site_cfg["display_name"]
@@ -294,11 +457,11 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
           </div>
         </div>"""
 
-    def page_footer(page_num: int, total: int = 5) -> str:
+    def page_footer(page_num: int, total: int = 6) -> str:
         return f"""
         <div class="footer">
           <span>PVPAT — Daily Performance Report &nbsp;·&nbsp; {site_name}</span>
-          <span>CONFIDENTIAL — 8p2 Advisory / Dolfines</span>
+          <span>CONFIDENTIAL — Dolfines</span>
           <span>Page {page_num} of {total}</span>
         </div>"""
 
@@ -314,7 +477,7 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
         {cap_dc:.0f} kWp DC &nbsp;/&nbsp; {cap_ac:.0f} kW AC<br/>
         {site_cfg.get('n_inverters','—')} × {site_cfg.get('inverter_model','—')}
       </div>
-      <div class="cover-badge">PVPAT Platform &nbsp;·&nbsp; 8p2 Advisory</div>
+      <div class="cover-badge">PVPAT Platform &nbsp;·&nbsp; Dolfines</div>
     </div>"""
 
     # ── PAGE 2: DAILY KPIs + IRRADIANCE ─────────────────────────────────────
@@ -453,6 +616,57 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
       {page_footer(5)}
     </div>"""
 
+    # ── PAGE 6: COMMENTARY + DATA QUALITY TABLE ──────────────────────────────
+    commentary_html = ""
+    if commentary:
+        items_html = "".join(
+            f"<li style='margin-bottom:5px;line-height:1.5;'>{c}</li>"
+            for c in commentary
+        )
+        commentary_html = f"""
+        <div class="section-title">Automated Interpretation</div>
+        <ul style="font-size:8.5pt;color:#333;padding-left:18px;margin-bottom:12px;">
+          {items_html}
+        </ul>"""
+
+    dq_rows_html = ""
+    if data_quality:
+        for row in data_quality:
+            analysis, (status_text, status_color), _, impact, remedy = row
+            dq_rows_html += f"""
+            <tr>
+              <td style="padding:4px 8px;font-size:8pt;">{analysis}</td>
+              <td style="padding:4px 8px;font-size:8pt;font-weight:700;color:{status_color};">{status_text}</td>
+              <td style="padding:4px 8px;font-size:8pt;color:#555;">{impact}</td>
+              <td style="padding:4px 8px;font-size:8pt;color:#777;">{remedy}</td>
+            </tr>"""
+
+    dq_table_html = f"""
+        <div class="section-title">Analysis Capability Summary</div>
+        <p style="font-size:8pt;color:#444;margin-bottom:6px;">
+          This table shows which analyses were possible given the data available
+          for this report, and what data would be needed to unlock missing analyses.
+        </p>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#003D6B;color:white;">
+              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Analysis</th>
+              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Status</th>
+              <th style="padding:5px 8px;font-size:8pt;text-align:left;">Impact on Report</th>
+              <th style="padding:5px 8px;font-size:8pt;text-align:left;">To Unlock</th>
+            </tr>
+          </thead>
+          <tbody>{dq_rows_html}</tbody>
+        </table>""" if data_quality else ""
+
+    p6 = f"""
+    <div class="page">
+      {page_header("Commentary & Data Quality")}
+      {commentary_html}
+      {dq_table_html}
+      {page_footer(6)}
+    </div>"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -467,6 +681,7 @@ def _render_html(*, site_cfg, report_date, logo_b64, irradiance, site_totals,
 {p3}
 {p4}
 {p5}
+{p6}
 </body>
 </html>"""
 
