@@ -119,7 +119,7 @@ def build_daily_report(
         # Colour-code by PR%: below 70% → red, below target → orange, else → green
         if avail == 0 or pr_pct < 70:
             ok_class = "row-danger"
-        elif not row["pr_ok"]:
+        elif pr_pct < pr_target * 100:
             ok_class = "row-warning"
         else:
             ok_class = "row-success"

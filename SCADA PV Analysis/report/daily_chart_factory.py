@@ -81,16 +81,15 @@ def chart_daily_irradiance(irradiance: dict,
     ax.tick_params(axis="y", labelcolor=_ORANGE)
     ax.set_ylim(bottom=0)
 
-    # ── Right axis: hourly AC production bars ─────────────────────────────
+    # ── Right axis: hourly AC production dotted line ──────────────────────
     has_prod = hourly_kwh is not None and not hourly_kwh.empty
     if has_prod:
         ax2 = ax.twinx()
-        # Bar width = 55 min in data units (matplotlib uses days)
-        bar_width = 55 / (24 * 60)
-        ax2.bar(hourly_kwh.index, hourly_kwh.values,
-                width=bar_width, align="edge",
-                color="none", edgecolor=_BLUE, linewidth=1.2,
-                label="Prod. (kWh/h)", zorder=2)
+        # Plot at mid-hour for a cleaner line
+        mid_index = hourly_kwh.index + pd.Timedelta(minutes=30)
+        ax2.plot(mid_index, hourly_kwh.values,
+                 color=_BLUE, lw=1.6, ls=":", marker="o",
+                 markersize=3.5, label="Prod. (kWh/h)", zorder=3)
         ax2.set_ylabel("AC Production  (kWh/h)", color=_BLUE)
         ax2.tick_params(axis="y", labelcolor=_BLUE)
         ax2.set_ylim(bottom=0)
