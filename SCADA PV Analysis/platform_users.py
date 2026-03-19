@@ -45,6 +45,7 @@ SITES = {
         "power_threshold": 5.0,
         # Paths to the SCADA data files (absolute, on local machine)
         "data_dir": r"C:\Users\RichardMUSI\OneDrive - Dolfines\Bureau\AI\dolfines-data-services-products\SCADA PV Analysis\00orig",
+        "site_type": "solar",
         "status": "operational",       # operational | maintenance | offline
         "lat": 48.8,
         "lon": 6.1,

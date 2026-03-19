@@ -214,6 +214,11 @@ st.markdown(f"""
 # SESSION STATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _sync_custom_sites():
+    """Ensure any user-added sites are always available in the SITES dict."""
+    for sid, cfg in st.session_state.get("custom_sites", {}).items():
+        SITES[sid] = cfg
+
 def _logged_in() -> bool:
     return st.session_state.get("user") is not None
 
@@ -382,12 +387,13 @@ def _view_portfolio():
             status_col = {"operational": "#2E8B57", "maintenance": "#E67E22",
                           "offline": "#C0392B"}.get(status, "#888")
 
+            site_icon = "🌬️" if site.get("site_type") == "wind" else "☀️"
             col_info, col_rep, col_del = st.columns([4, 1, 1])
             with col_info:
                 st.markdown(f"""
                 <div class="site-card">
                   <div class="site-card-name">
-                    {site['display_name']}
+                    {site_icon} {site['display_name']}
                     <span style="background:{status_col};color:white;font-size:0.62rem;
                       padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;
                       font-weight:700;">{status_lbl}</span>
@@ -398,9 +404,6 @@ def _view_portfolio():
             with col_rep:
                 st.markdown("<div style='margin-top:1.2rem;'>", unsafe_allow_html=True)
                 if st.button("Generate Report →", key=f"go_{site_id}"):
-                    # Register custom site in SITES so report views can find it
-                    if is_custom:
-                        SITES[site_id] = site
                     st.session_state["selected_site"] = site_id
                     st.session_state["view"] = "report_select"
                     st.rerun()
@@ -418,11 +421,13 @@ def _view_portfolio():
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
     with st.expander("➕  Add a new site"):
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             new_name = st.text_input("Site name *", placeholder="e.g. Sahara Solar Park", key="ns_name")
         with c2:
             new_cap  = st.text_input("Capacity (MWp DC) *", placeholder="e.g. 9.84", key="ns_cap")
+        with c3:
+            new_type = st.radio("Site type", ["☀️ Solar", "🌬️ Wind"], horizontal=True, key="ns_type")
 
         if st.button("Add site", key="btn_add_site"):
             if not new_name.strip():
@@ -437,17 +442,18 @@ def _view_portfolio():
                     cap_kwp = None
                 if cap_kwp is not None:
                     slug = "USR_" + "".join(c if c.isalnum() else "_" for c in new_name.upper())[:20]
+                    stype = "wind" if "Wind" in new_type else "solar"
                     st.session_state["custom_sites"][slug] = {
-                        "display_name": new_name.strip(),
-                        "cap_dc_kwp":   cap_kwp,
-                        "cap_ac_kw":    cap_kwp * 0.9,
-                        "status":       "operational",
-                        "n_inverters":  0,
+                        "display_name":   new_name.strip(),
+                        "cap_dc_kwp":     cap_kwp,
+                        "cap_ac_kw":      cap_kwp * 0.9,
+                        "site_type":      stype,
+                        "status":         "operational",
+                        "n_inverters":    0,
                         "inverter_model": "—",
-                        "inv_ac_kw":    0,
+                        "inv_ac_kw":      0,
                         "region": "", "country": "", "cod": "—", "technology": "—",
                     }
-                    # Clear input fields
                     st.session_state.pop("ns_name", None)
                     st.session_state.pop("ns_cap",  None)
                     st.rerun()
@@ -458,10 +464,12 @@ def _view_portfolio():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _view_report_select():
+    _sync_custom_sites()
     _render_header()
 
-    site_id = st.session_state.get("selected_site", "")
-    site    = SITES.get(site_id, {})
+    site_id   = st.session_state.get("selected_site", "")
+    site      = SITES.get(site_id, {})
+    is_wind   = site.get("site_type") == "wind"
 
     # Initialise selection state (persists across reruns on this page)
     if "report_choice" not in st.session_state:
@@ -497,21 +505,23 @@ def _view_report_select():
     comp_bg      = "rgba(240,120,32,0.18)" if comp_sel  else "rgba(255,255,255,0.06)"
     comp_check   = "<span style='float:right;font-size:1.1rem;color:#22c55e;'>✔</span>" if comp_sel  else ""
 
-    # CSS: make entire card area clickable by overlaying the invisible button
+    # CSS: make entire card area clickable — scoped to column-level blocks only
+    # Using [data-testid="column"] ancestor prevents the outer page stVerticalBlock
+    # from matching :has(.pvpat-report-card), which would make ALL buttons invisible.
     st.markdown("""
     <style>
-      [data-testid="stVerticalBlock"]:has(.pvpat-report-card) {
+      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) {
         position: relative !important;
       }
-      [data-testid="stVerticalBlock"]:has(.pvpat-report-card) .pvpat-report-card {
+      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) .pvpat-report-card {
         pointer-events: none;
       }
-      [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] {
+      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] {
         position: absolute !important;
         inset: 0 !important;
         z-index: 5 !important;
       }
-      [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] > button {
+      [data-testid="column"] [data-testid="stVerticalBlock"]:has(.pvpat-report-card) [data-testid="stButton"] > button {
         width: 100% !important;
         height: 100% !important;
         min-height: 240px !important;
@@ -526,22 +536,35 @@ def _view_report_select():
 
     col_a, col_b = st.columns(2)
 
+    daily_icon  = "🌬️" if is_wind else "☀️"
+    daily_title = "Simple Daily Wind Report" if is_wind else "Simple Daily Report"
+    daily_bullets = (
+        ["4–5 pages, generated instantly",
+         "Turbine availability per unit",
+         "Daily energy production",
+         "Average wind speed &amp; direction",
+         "Wind rose summary",
+         "Alerts &amp; alarms with recommended fixes"]
+        if is_wind else
+        ["4–5 pages, generated instantly",
+         "Specific yield &amp; PR per inverter",
+         "Fleet availability dashboard",
+         "Daily irradiance profile",
+         "Energy loss waterfall",
+         "Alerts &amp; alarms with recommended fixes"]
+    )
+
     with col_a:
         st.markdown(f"""
         <div class="pvpat-report-card" style="background:{daily_bg};border:{daily_border};
           border-radius:10px;padding:1.4rem 1.6rem;min-height:220px;
           cursor:pointer;transition:border 0.15s,background 0.15s;">
           <div style="font-size:1.05rem;font-weight:700;color:#F07820;margin-bottom:8px;">
-            ☀️ Simple Daily Report {daily_check}
+            {daily_icon} {daily_title} {daily_check}
           </div>
           <ul style="color:rgba(255,255,255,0.82);font-size:0.87rem;
             line-height:1.75;padding-left:1.2rem;margin:0;">
-            <li>4–5 pages, generated instantly</li>
-            <li>Specific yield &amp; PR per inverter</li>
-            <li>Fleet availability dashboard</li>
-            <li>Daily irradiance profile</li>
-            <li>Energy loss waterfall</li>
-            <li>Alerts &amp; alarms with recommended fixes</li>
+            {"".join(f"<li>{b}</li>" for b in daily_bullets)}
           </ul>
         </div>""", unsafe_allow_html=True)
         if st.button("Select Daily Report", key="btn_daily", use_container_width=True):
@@ -558,12 +581,21 @@ def _view_report_select():
           </div>
           <ul style="color:rgba(255,255,255,0.75);font-size:0.87rem;
             line-height:1.75;padding-left:1.2rem;margin:0;">
-            <li>20–25 pages, full technical analysis</li>
-            <li>Monthly energy, PR &amp; irradiance trends</li>
-            <li>Inverter fleet comparison &amp; heatmaps</li>
-            <li>Data quality &amp; SARAH coherence</li>
-            <li>Loss analysis &amp; technology risk register</li>
-            <li>Full action punchlist with EUR impact</li>
+            {"".join(f"<li>{b}</li>" for b in (
+              ["20–25 pages, full technical analysis",
+               "Monthly energy, availability &amp; wind trends",
+               "Turbine fleet comparison &amp; heatmaps",
+               "Wind rose &amp; power curve analysis",
+               "Loss analysis &amp; OEM benchmarking",
+               "Full action punchlist with EUR impact"]
+              if is_wind else
+              ["20–25 pages, full technical analysis",
+               "Monthly energy, PR &amp; irradiance trends",
+               "Inverter fleet comparison &amp; heatmaps",
+               "Data quality &amp; SARAH coherence",
+               "Loss analysis &amp; technology risk register",
+               "Full action punchlist with EUR impact"]
+            ))}
           </ul>
         </div>""", unsafe_allow_html=True)
         if st.button("Select Comprehensive Report", key="btn_comp", use_container_width=True):
@@ -581,14 +613,15 @@ def _view_report_select():
                 unsafe_allow_html=True)
         else:
             btn_label = (
-                "⚡ Generate Daily Report →" if choice == "daily"
+                f"{'🌬️' if is_wind else '⚡'} Generate Daily Report →" if choice == "daily"
                 else "📊 Generate Comprehensive Report →"
             )
             if st.button(btn_label, key="btn_generate", use_container_width=True):
                 st.session_state["report_type"] = choice
                 st.session_state.pop("report_choice", None)
                 st.session_state["view"] = (
-                    "daily_config" if choice == "daily" else "comp_info"
+                    ("wind_daily_config" if is_wind else "daily_config")
+                    if choice == "daily" else "comp_info"
                 )
                 st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -599,15 +632,20 @@ def _view_report_select():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _view_daily_config():
+    _sync_custom_sites()
     _render_header()
 
     site_id = st.session_state.get("selected_site", "")
     site    = SITES.get(site_id, {})
 
-    col_back, _ = st.columns([1, 5])
+    col_back, col_port, _ = st.columns([1, 2, 3])
     with col_back:
         if st.button("← Back"):
             st.session_state["view"] = "report_select"
+            st.rerun()
+    with col_port:
+        if st.button("← Back to Portfolio"):
+            st.session_state["view"] = "portfolio"
             st.rerun()
 
     st.markdown(
@@ -774,15 +812,20 @@ def _view_comp_info():
     import io as _io, json as _json, zipfile as _zip
     from datetime import datetime as _dt
 
+    _sync_custom_sites()
     _render_header()
     user    = st.session_state["user"]
     site_id = st.session_state.get("selected_site", "")
     site    = SITES.get(site_id, {})
 
-    col_back, _ = st.columns([1, 5])
+    col_back, col_port, _ = st.columns([1, 2, 3])
     with col_back:
         if st.button("← Back"):
             st.session_state["view"] = "report_select"
+            st.rerun()
+    with col_port:
+        if st.button("← Back to Portfolio"):
+            st.session_state["view"] = "portfolio"
             st.rerun()
 
     st.markdown(
@@ -970,12 +1013,86 @@ def _view_comp_info():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# VIEW: WIND DAILY REPORT CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _view_wind_daily_config():
+    _sync_custom_sites()
+    _render_header()
+
+    site_id = st.session_state.get("selected_site", "")
+    site    = SITES.get(site_id, {})
+
+    col_back, col_port, _ = st.columns([1, 2, 3])
+    with col_back:
+        if st.button("← Back"):
+            st.session_state["view"] = "report_select"
+            st.rerun()
+    with col_port:
+        if st.button("← Back to Portfolio"):
+            st.session_state["view"] = "portfolio"
+            st.rerun()
+
+    st.markdown(
+        f"<div class='step-hdr'>🌬️ Wind Daily Report — {site.get('display_name','')}</div>",
+        unsafe_allow_html=True)
+
+    st.markdown("""<div class="sub-hdr">Report Configuration</div>""", unsafe_allow_html=True)
+
+    yesterday = date.today() - timedelta(days=1)
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        report_date = st.date_input(
+            "Report date", value=yesterday, max_value=date.today(),
+            help="Select the day you want to analyse.")
+    with c2:
+        data_source = st.radio(
+            "Data source",
+            ["Upload SCADA files"],
+            index=0)
+
+    st.markdown("""<div class="sub-hdr">Upload Wind SCADA Data</div>""", unsafe_allow_html=True)
+    st.caption(
+        "10-min turbine SCADA export. Expected columns: "
+        "`Time_UDT ; TURBINE ; POWER_KW ; WIND_MS ; WIND_DIR_DEG ; AVAILABILITY_PCT`")
+
+    cu1, cu2 = st.columns(2)
+    with cu1:
+        uploaded_power = st.file_uploader(
+            "Turbine power / status files", type=["csv","txt"],
+            accept_multiple_files=True, key="wind_up_power")
+    with cu2:
+        uploaded_met = st.file_uploader(
+            "Met mast / wind data (optional)", type=["csv","txt"],
+            accept_multiple_files=True, key="wind_up_met")
+
+    st.divider()
+
+    _, col_btn, _ = st.columns([2, 2, 2])
+    with col_btn:
+        generate = st.button("🌬️ Generate Wind Daily Report")
+
+    if generate:
+        st.info(
+            "Wind daily report generation is coming soon. "
+            "Your data has been noted — the 8p2 team will process it manually "
+            "and deliver the report within 24 hours.",
+            icon="🔧")
+        if uploaded_power:
+            st.markdown(
+                f"**{len(uploaded_power)} file(s) uploaded** for "
+                f"{site.get('display_name','')} — {report_date.strftime('%d %b %Y')}",
+                unsafe_allow_html=False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ROUTER
 # ─────────────────────────────────────────────────────────────────────────────
 
 if not _logged_in():
     _view_login()
 else:
+    _sync_custom_sites()          # always keep SITES in sync on every render
     view = st.session_state.get("view", "portfolio")
     if view == "portfolio":
         _view_portfolio()
@@ -983,6 +1100,8 @@ else:
         _view_report_select()
     elif view == "daily_config":
         _view_daily_config()
+    elif view == "wind_daily_config":
+        _view_wind_daily_config()
     elif view == "comp_info":
         _view_comp_info()
     else:
