@@ -304,7 +304,7 @@ _STANDARD_NAMES = {
 
 # Roles that are optional (skipping does not block generation)
 _ROLE_OPTIONAL = {
-    "solar": set(),
+    "solar": {"irradiance"},        # irradiance may be in a separate file
     "wind":  {"wind_dir", "availability"},
 }
 
@@ -1270,49 +1270,29 @@ def _view_comp_info():
         data_years = st.multiselect(
             "Years covered by the data",
             [str(y) for y in range(2019, 2027)], default=[])
-        inv_upload_mode = st.radio(
-            "Inverter data organisation",
-            ["All inverters in one set of files",
-             "Split by inverter group / substation"], index=0)
     with c2:
         notes = st.text_area(
             "Notes for the analysis team (optional)",
             placeholder="Known data gaps, curtailment periods, maintenance events…",
             height=110)
 
-    split_mode = (inv_upload_mode == "Split by inverter group / substation")
+    # ── SCADA data files + column mapping ───────────────────────────────────────
+    st.markdown("<div class='sub-hdr'>SCADA Data Files</div>", unsafe_allow_html=True)
+    st.caption(
+        "Upload one or more CSV / Excel files. Each file can contain time, "
+        "power (all selected inverter/combiner columns are summed) and irradiance "
+        "columns. The platform auto-detects columns — adjust if needed."
+    )
+    _ACCEPTED_COMP = ["csv", "xlsx", "xls", "txt"]
+    comp_uploaded = st.file_uploader(
+        "SCADA data files (CSV / Excel)",
+        type=_ACCEPTED_COMP, accept_multiple_files=True, key="comp_scada") or []
 
-    # ── Inverter power files ────────────────────────────────────────────────────
-    st.markdown("<div class='sub-hdr'>Inverter Power Data (10-min SCADA)</div>",
-                unsafe_allow_html=True)
-    st.caption("Expected columns: `Time_UDT ; EQUIP ; PAC` (semicolon-separated). "
-               "One file per year, or multiple files if split by group.")
-
-    inv_files: dict = {}
-    if not split_mode:
-        files = st.file_uploader(
-            f"All inverter power files — {site.get('n_inverters','?')} inverters",
-            type=["csv"], accept_multiple_files=True, key="comp_inv_all")
-        inv_files["all"] = files or []
-    else:
-        n_groups = st.number_input("Number of inverter groups / substations",
-                                   min_value=1, max_value=20, value=2, step=1,
-                                   key="comp_ngroups")
-        grp_cols = st.columns(min(int(n_groups), 4))
-        for g in range(int(n_groups)):
-            with grp_cols[g % 4]:
-                files = st.file_uploader(
-                    f"Group {g+1} files", type=["csv"],
-                    accept_multiple_files=True, key=f"comp_inv_g{g}")
-                inv_files[f"group_{g+1}"] = files or []
-
-    # ── Irradiance ──────────────────────────────────────────────────────────────
-    st.markdown("<div class='sub-hdr'>Irradiance Data</div>", unsafe_allow_html=True)
-    st.caption("GHI (and optionally POA, ambient temperature). "
-               "Expected columns: `Time_UDT ; GHI (W/m²)`.")
-    irr_files = st.file_uploader(
-        "Irradiance CSV files (one per year)",
-        type=["csv"], accept_multiple_files=True, key="comp_irr") or []
+    comp_mapped = None
+    if comp_uploaded:
+        st.markdown("<div class='sub-hdr'>Column Mapping</div>", unsafe_allow_html=True)
+        comp_mapped = _show_column_mapper(comp_uploaded, site_type="solar",
+                                          state_key="cm_comp")
 
     # ── Other ───────────────────────────────────────────────────────────────────
     st.markdown("<div class='sub-hdr'>Additional Data (optional)</div>",
@@ -1327,21 +1307,23 @@ def _view_comp_info():
     # ── Validation & summary ────────────────────────────────────────────────────
     st.divider()
     errors = []
-    if _count(inv_files) == 0:
-        errors.append("At least one inverter power CSV must be uploaded.")
-    if _count(irr_files) == 0:
-        errors.append("At least one irradiance CSV must be uploaded.")
+    _comp_pending = bool(comp_uploaded and comp_mapped is None)
+    if not comp_uploaded:
+        errors.append("At least one SCADA data file must be uploaded.")
+    if _comp_pending:
+        st.info("✏️ Confirm the column mapping above, then submit.")
 
-    n_inv = _count(inv_files)
-    n_irr = _count(irr_files)
-    n_oth = _count(other_files)
+    n_inv  = len(comp_uploaded)
+    n_irr  = 0   # irradiance comes from column mapping, not a separate uploader
+    n_oth  = len(other_files)
 
     with st.expander(f"📍 {site.get('display_name','')} — submission summary",
                      expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown(f"{'✅' if n_inv else '⚠️'} **Inverter power:** {n_inv} file(s)")
-            st.markdown(f"{'✅' if n_irr else '⚠️'} **Irradiance:** {n_irr} file(s)")
+            st.markdown(f"{'✅' if n_inv else '⚠️'} **SCADA files:** {n_inv} file(s)")
+            st.markdown(f"{'✅' if comp_mapped else ('⏳' if comp_uploaded else '⚠️')} "
+                        f"**Column mapping:** {'confirmed' if comp_mapped else ('pending' if comp_uploaded else 'no files')}")
         with c2:
             st.markdown(f"{'✅' if n_oth else '—'} **Other data:** {n_oth} file(s)")
             cap_dc_mw = site.get("cap_dc_kwp", 0) / 1000
@@ -1366,10 +1348,13 @@ def _view_comp_info():
     col_btn, _ = st.columns([2, 5])
     with col_btn:
         submit = st.button("📤  Submit Data for Comprehensive Analysis",
-                           disabled=bool(errors))
+                           disabled=bool(errors) or _comp_pending)
 
     # ── Submission ──────────────────────────────────────────────────────────────
-    if submit and not errors:
+    if submit and not errors and not _comp_pending:
+        import tempfile as _tmpfile
+        from pathlib import Path as _Path
+
         timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
         safe      = lambda s: "".join(c if c.isalnum() or c in "-_" else "_" for c in s)
         pkg_name  = f"PVPAT_{safe(user['company'])}_{safe(site.get('display_name','site'))}_{timestamp}"
@@ -1380,25 +1365,28 @@ def _view_comp_info():
                 "client": user["company"], "contact_name": user["display_name"],
                 "contact_email": user["email"],
                 "site": site.get("display_name",""), "notes": notes,
-                "inv_upload_mode": inv_upload_mode, "data_years": data_years,
+                "data_years": data_years,
             }
 
             buf     = _io.BytesIO()
             uploads = []
 
             with _zip.ZipFile(buf, "w", _zip.ZIP_DEFLATED) as zf:
-                for grp, flist in inv_files.items():
-                    for f in flist:
-                        fbytes = f.getbuffer().tobytes()
-                        rel    = f"inverter/{grp}/{f.name}"
+                # Normalised SCADA files (column-mapped)
+                if comp_mapped:
+                    for fname, norm_df in _normalise_files(comp_mapped, "solar"):
+                        folder = "irradiance" if fname.startswith("irradiance_") else "scada"
+                        fbytes = norm_df.to_csv(index=False, sep=";").encode("utf-8")
+                        rel    = f"{folder}/{fname}"
                         zf.writestr(rel, fbytes)
                         uploads.append((rel, fbytes))
-
-                for f in irr_files:
-                    fbytes = f.getbuffer().tobytes()
-                    rel    = f"irradiance/{f.name}"
-                    zf.writestr(rel, fbytes)
-                    uploads.append((rel, fbytes))
+                else:
+                    # Fallback: raw files as-is
+                    for f in comp_uploaded:
+                        fbytes = f.getbuffer().tobytes()
+                        rel    = f"scada/{f.name}"
+                        zf.writestr(rel, fbytes)
+                        uploads.append((rel, fbytes))
 
                 for f in other_files:
                     fbytes = f.getbuffer().tobytes()
@@ -1423,7 +1411,7 @@ def _view_comp_info():
                 except Exception as exc:
                     sp_err = str(exc)
 
-        total = n_inv + n_irr + n_oth
+        total = len(uploads) - 1  # exclude metadata
         if sp_ok:
             st.success(f"""
             ✅ **Submission received — thank you, {user['display_name']}.**
