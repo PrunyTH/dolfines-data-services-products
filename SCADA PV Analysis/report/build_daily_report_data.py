@@ -177,7 +177,23 @@ def build_daily_report(
     if skip_pdf:
         return None, html_path
 
-    _playwright_pdf(html_path, pdf_path)
+    _fpdf2_pdf(
+        pdf_path,
+        site_cfg     = site_cfg,
+        report_date  = report_date,
+        site_totals  = site_totals,
+        irradiance   = irradiance,
+        per_inv      = per_inv,
+        alerts       = alerts,
+        chart_irr    = chart_irr,
+        chart_yield  = chart_yield,
+        chart_avail  = chart_avail,
+        chart_pr     = chart_pr,
+        chart_wfall  = chart_wfall,
+        logo_b64     = logo_b64,
+        commentary   = commentary,
+        data_quality = data_quality,
+    )
     return pdf_path, html_path
 
 
@@ -1002,3 +1018,494 @@ def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
     )
     from report.render_report import render_pdf_with_playwright
     render_pdf_with_playwright(html_path=html_path, pdf_path=pdf_path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FPDF2 PDF GENERATION (pure-Python, no Chromium)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags and decode common entities."""
+    import re, html
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _fpdf2_pdf(
+    pdf_path: Path,
+    *,
+    site_cfg: dict,
+    report_date,
+    site_totals: dict,
+    irradiance: dict,
+    per_inv,
+    alerts: list,
+    chart_irr: str,
+    chart_yield: str,
+    chart_avail: str,
+    chart_pr: str,
+    chart_wfall: str,
+    logo_b64: str,
+    commentary: list,
+    data_quality: list,
+) -> None:
+    import io
+    from fpdf import FPDF
+
+    # ── Colours ───────────────────────────────────────────────────────────────
+    NAVY   = (0,   61,  107)
+    ORANGE = (240, 120,  32)
+    LGRAY  = (244, 246, 248)
+    DTXT   = ( 31,  41,  51)
+    MGRAY  = (107, 119, 133)
+    GREEN  = ( 70, 173,  71)
+    RED    = (198,  40,  40)
+    AMBER  = (201, 138,   0)
+    WHITE  = (255, 255, 255)
+    BDRG   = (217, 224, 230)
+
+    pr_target = site_cfg["operating_pr_target"]
+    site_name = site_cfg["display_name"]
+    date_str  = report_date.strftime("%d %B %Y")
+    gen_dt    = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    # ── Decode helpers ────────────────────────────────────────────────────────
+    def chart_bytes(b64_uri: str) -> io.BytesIO | None:
+        if not b64_uri:
+            return None
+        try:
+            raw = base64.b64decode(b64_uri.split(",", 1)[1])
+            return io.BytesIO(raw)
+        except Exception:
+            return None
+
+    def logo_bytes() -> io.BytesIO | None:
+        if not logo_b64:
+            return None
+        try:
+            raw = base64.b64decode(logo_b64.split(",", 1)[1])
+            return io.BytesIO(raw)
+        except Exception:
+            return None
+
+    def pr_color(pct):
+        if pct >= pr_target * 100 - 2:  return GREEN
+        if pct >= pr_target * 100 - 8:  return AMBER
+        return RED
+
+    def avail_color(pct):
+        if pct >= 95: return GREEN
+        if pct >= 85: return AMBER
+        return RED
+
+    # ── PDF object ────────────────────────────────────────────────────────────
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=False)
+    pdf.set_margins(0, 0, 0)
+
+    PAGE_W, PAGE_H = 210, 297
+
+    # ── Shared: header band (navy + logo + site name + orange stripe) ─────────
+    def draw_header():
+        pdf.set_fill_color(*NAVY)
+        pdf.rect(0, 0, PAGE_W, 18, "F")
+        lb = logo_bytes()
+        if lb:
+            try:
+                pdf.image(lb, x=5, y=2, h=14)
+            except Exception:
+                pass
+        pdf.set_xy(10, 4)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(*WHITE)
+        pdf.cell(PAGE_W - 15, 6, site_name, align="R")
+        pdf.set_xy(10, 11)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(200, 220, 240)
+        pdf.cell(PAGE_W - 15, 5, f"Daily Performance Report \u00b7 {date_str}", align="R")
+        pdf.set_fill_color(*ORANGE)
+        pdf.rect(0, 18, PAGE_W, 1.5, "F")
+        pdf.set_text_color(*DTXT)
+
+    # ── Shared: footer ────────────────────────────────────────────────────────
+    def draw_footer(n: int, total: int = 6):
+        pdf.set_xy(10, PAGE_H - 10)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(*MGRAY)
+        pdf.cell(63, 5, f"PVPAT \u2014 Daily Performance Report \u00b7 {site_name}", align="L")
+        pdf.cell(64, 5, "CONFIDENTIAL \u2014 Dolfines", align="C")
+        pdf.cell(63, 5, f"Page {n} of {total}", align="R")
+
+    # ── Shared: section heading ───────────────────────────────────────────────
+    def section_heading(eyebrow: str, title: str, sub: str = "", y: float = 22):
+        pdf.set_xy(10, y)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.set_text_color(*MGRAY)
+        pdf.cell(0, 4, eyebrow.upper())
+        pdf.set_xy(10, y + 5)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(*NAVY)
+        pdf.cell(0, 7, title)
+        if sub:
+            pdf.set_xy(10, y + 13)
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(*MGRAY)
+            pdf.cell(0, 5, sub)
+
+    # ── Shared: KPI card ──────────────────────────────────────────────────────
+    def kpi_card(x, y, w, h, label, value, sub, val_color=NAVY):
+        pdf.set_fill_color(*LGRAY)
+        pdf.rect(x, y, w, h, "F")
+        pdf.set_draw_color(*BDRG)
+        pdf.rect(x, y, w, h)
+        pdf.set_xy(x + 2, y + 2)
+        pdf.set_font("Helvetica", "B", 6)
+        pdf.set_text_color(*MGRAY)
+        pdf.cell(w - 4, 4, label.upper())
+        pdf.set_xy(x + 2, y + 7)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(*val_color)
+        pdf.cell(w - 4, 6, str(value))
+        pdf.set_xy(x + 2, y + 14)
+        pdf.set_font("Helvetica", "", 6)
+        pdf.set_text_color(*MGRAY)
+        pdf.cell(w - 4, 4, str(sub))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 1 — COVER
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    pdf.set_fill_color(*NAVY)
+    pdf.rect(0, 0, PAGE_W, 22, "F")
+    lb = logo_bytes()
+    if lb:
+        try:
+            pdf.image(lb, x=5, y=3, h=16)
+        except Exception:
+            pass
+    pdf.set_xy(10, 5)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*WHITE)
+    pdf.cell(PAGE_W - 15, 7, "Dolfines", align="R")
+    pdf.set_xy(10, 13)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(200, 220, 240)
+    pdf.cell(PAGE_W - 15, 5, site_name, align="R")
+    pdf.set_fill_color(*ORANGE)
+    pdf.rect(0, 22, PAGE_W, 2, "F")
+
+    pdf.set_xy(10, 35)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*MGRAY)
+    pdf.cell(0, 5, "DAILY PERFORMANCE REPORT")
+    pdf.set_xy(10, 43)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(*NAVY)
+    pdf.multi_cell(190, 11, site_name)
+    pdf.set_xy(10, pdf.get_y() + 2)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(*MGRAY)
+    pdf.cell(0, 6, "Automated SCADA-based daily performance analysis")
+
+    # Orange border box
+    pdf.set_draw_color(*ORANGE)
+    pdf.set_line_width(0.8)
+    pdf.rect(10, 80, 190, 75)
+    pdf.set_line_width(0.2)
+
+    meta = [
+        ("Report Date",  date_str),
+        ("Asset",        f"{site_cfg['cap_dc_kwp']:.0f} kWp DC / {site_cfg['cap_ac_kw']:.0f} kW AC"),
+        ("Technology",   site_cfg.get("technology", "\u2014")),
+        ("Inverters",    f"{site_cfg.get('n_inverters','\u2014')} \u00d7 {site_cfg.get('inverter_model','\u2014')}"),
+        ("Generated",    gen_dt),
+    ]
+    for i, (lbl, val) in enumerate(meta):
+        col = i % 2
+        row = i // 2
+        mx = 18 + col * 97
+        my = 88 + row * 22
+        pdf.set_xy(mx, my)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.set_text_color(*MGRAY)
+        pdf.cell(90, 4, lbl.upper())
+        pdf.set_xy(mx, my + 5)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(*NAVY)
+        pdf.cell(90, 6, val)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 2 — DAILY KPIs + IRRADIANCE CHART
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    draw_header()
+    section_heading("Daily Summary", "Daily Key Performance Indicators",
+                    f"Site-level KPIs for {date_str}.", y=22)
+
+    high_c = sum(1 for a in alerts if a["severity"] == "HIGH")
+    med_c  = sum(1 for a in alerts if a["severity"] == "MEDIUM")
+    alert_txt = f"{high_c}H \u00b7 {med_c}M" if (high_c or med_c) else "None"
+    alert_col = RED if high_c else AMBER if med_c else GREEN
+
+    kpis5 = [
+        ("Total Energy",     f"{site_totals['total_energy_kwh']:,.0f}", "kWh",             NAVY),
+        ("Specific Yield",   f"{site_totals['spec_yield']:.3f}",        "kWh/kWp",         NAVY),
+        ("Perf. Ratio",      f"{site_totals['pr_pct']:.1f}%",           f"Target {site_totals['pr_target_pct']:.0f}%",
+         pr_color(site_totals["pr_pct"])),
+        ("Fleet Avail.",     f"{site_totals['availability_pct']:.1f}%", "daylight hours",
+         avail_color(site_totals["availability_pct"])),
+        ("Alerts",           alert_txt,                                  "today",           alert_col),
+    ]
+    cw = 37.5
+    for i, (lbl, val, sub, col) in enumerate(kpis5):
+        kpi_card(10 + i * (cw + 1), 40, cw, 22, lbl, val, sub, col)
+
+    kpis3 = [
+        ("Insolation",        f"{irradiance['insolation_kwh_m2']:.2f}",  "kWh/m\u00b2", NAVY),
+        ("Peak GHI",          f"{irradiance['peak_ghi']:.0f}",           "W/m\u00b2",   NAVY),
+        ("Energy vs Expected",
+         f"{'+' if site_totals['energy_delta_kwh']>=0 else ''}{site_totals['energy_delta_kwh']:,.0f}",
+         "kWh vs target PR",
+         GREEN if site_totals["energy_delta_kwh"] >= 0 else RED),
+    ]
+    cw3 = 62
+    for i, (lbl, val, sub, col) in enumerate(kpis3):
+        kpi_card(10 + i * (cw3 + 2), 65, cw3, 22, lbl, val, sub, col)
+
+    cb = chart_bytes(chart_irr)
+    if cb:
+        pdf.image(cb, x=10, y=90, w=190)
+
+    draw_footer(2)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 3 — PER-INVERTER TABLE + YIELD / PR CHARTS
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    draw_header()
+    section_heading("Per-Inverter Analysis", "Specific Yield & Performance Ratio",
+                    f"Inverter-level breakdown for {date_str}.", y=22)
+
+    # Table
+    tx, ty, tw = 10, 40, 190
+    col_ws = [50, 32, 32, 28, 28, 20]
+    headers = ["Inverter", "Spec. Yield\n(kWh/kWp)", "Energy\n(kWh)", "PR (%)", "Avail.", "Peak (kW)"]
+    row_h = 7
+
+    # Header row
+    pdf.set_fill_color(*LGRAY)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_text_color(*NAVY)
+    cx = tx
+    for h_lbl, cw in zip(headers, col_ws):
+        pdf.set_xy(cx, ty)
+        pdf.set_fill_color(*LGRAY)
+        pdf.rect(cx, ty, cw, row_h, "FD")
+        pdf.set_xy(cx + 1, ty + 1)
+        pdf.multi_cell(cw - 2, 3, h_lbl, align="C")
+        cx += cw
+
+    # Data rows
+    for ri, (_, row) in enumerate(per_inv.iterrows()):
+        pr_pct  = row["pr"] * 100
+        av_pct  = row["availability"] * 100
+        if av_pct == 0 or pr_pct < 70:
+            bg = (253, 236, 234)
+        elif pr_pct < pr_target * 100:
+            bg = (255, 245, 230)
+        else:
+            bg = (237, 247, 233)
+        ry = ty + (ri + 1) * row_h
+        vals = [row["inverter"], f"{row['spec_yield']:.3f}", f"{row['energy_kwh']:.1f}",
+                f"{pr_pct:.1f}%", f"{av_pct:.0f}%", f"{row['peak_kw']:.1f}"]
+        cx = tx
+        for val, cw in zip(vals, col_ws):
+            pdf.set_fill_color(*bg)
+            pdf.rect(cx, ry, cw, row_h, "FD")
+            pdf.set_xy(cx + 1, ry + 2)
+            pdf.set_font("Helvetica", "", 7)
+            pdf.set_text_color(*DTXT)
+            pdf.cell(cw - 2, 4, str(val), align="R" if cx > tx else "L")
+            cx += cw
+        if ry > 160:  # Guard against table running off page
+            break
+
+    # Two charts side by side
+    chart_y = ty + (min(len(per_inv), 15) + 1) * row_h + 5
+    if chart_y > 170:
+        chart_y = 170
+    cby = chart_bytes(chart_yield)
+    cbp = chart_bytes(chart_pr)
+    if cby:
+        pdf.image(cby, x=10, y=chart_y, w=93)
+    if cbp:
+        pdf.image(cbp, x=107, y=chart_y, w=93)
+
+    draw_footer(3)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 4 — AVAILABILITY
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    draw_header()
+    section_heading("Availability Analysis", "Per-Inverter Availability",
+                    "Fraction of daylight intervals each inverter was operational.", y=22)
+
+    irr_thr = site_cfg.get("irr_threshold", 50)
+    pwr_thr = site_cfg.get("power_threshold", 1)
+    pdf.set_xy(10, 42)
+    pdf.set_fill_color(251, 252, 253)
+    pdf.set_draw_color(*BDRG)
+    pdf.rect(10, 42, 190, 20, "FD")
+    pdf.set_draw_color(240, 120, 32)
+    pdf.rect(10, 42, 3, 20, "F")
+    pdf.set_draw_color(*BDRG)
+    pdf.set_xy(15, 44)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 5, "Availability Methodology")
+    pdf.set_xy(15, 50)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*DTXT)
+    pdf.multi_cell(183, 4.5,
+        f"Availability is the fraction of 10-min intervals during daylight hours "
+        f"(GHI > {irr_thr:.0f} W/m\u00b2) where AC power exceeded {pwr_thr:.0f} kW. "
+        f"Inverters with zero availability were offline all day.")
+
+    cba = chart_bytes(chart_avail)
+    if cba:
+        pdf.image(cba, x=10, y=65, w=190)
+
+    draw_footer(4)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 5 — WATERFALL + ALERTS
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    draw_header()
+    section_heading("Energy Losses", "Daily Energy Loss Waterfall",
+                    "Decomposition of theoretical energy into successive loss categories.", y=22)
+
+    cbw = chart_bytes(chart_wfall)
+    if cbw:
+        pdf.image(cbw, x=10, y=40, w=190)
+
+    # Alerts
+    alerts_y = 155
+    pdf.set_xy(10, alerts_y)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 6, "Alerts & Alarms")
+    alerts_y += 8
+
+    if not alerts:
+        pdf.set_xy(10, alerts_y)
+        pdf.set_fill_color(251, 252, 253)
+        pdf.rect(10, alerts_y, 190, 12, "FD")
+        pdf.set_xy(13, alerts_y + 3)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*DTXT)
+        pdf.cell(0, 5, "No alerts detected. All inverters operated within expected parameters.")
+        alerts_y += 14
+    else:
+        for a in alerts:
+            sev = a["severity"]
+            bar_col = RED if sev == "HIGH" else AMBER if sev == "MEDIUM" else DTXT
+            if alerts_y > 270:
+                break
+            pdf.set_fill_color(251, 252, 253)
+            pdf.rect(10, alerts_y, 190, 18, "FD")
+            pdf.set_fill_color(*bar_col)
+            pdf.rect(10, alerts_y, 3, 18, "F")
+            pdf.set_xy(15, alerts_y + 2)
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_text_color(*DTXT)
+            pdf.cell(0, 4, f"{a['inverter']} \u2014 {a['description']}")
+            pdf.set_xy(15, alerts_y + 7)
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.set_text_color(*MGRAY)
+            pdf.multi_cell(183, 4, f"Cause: {a.get('likely_cause','')}. Action: {a.get('recommended_action','')}.")
+            alerts_y += 20
+
+    draw_footer(5)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 6 — COMMENTARY + DATA QUALITY
+    # ─────────────────────────────────────────────────────────────────────────
+    pdf.add_page()
+    draw_header()
+    section_heading("Interpretation", "Commentary & Analysis Capability",
+                    "Automated interpretation and data quality assessment.", y=22)
+
+    cy = 42
+    # Commentary card
+    pdf.set_fill_color(251, 252, 253)
+    pdf.set_draw_color(*BDRG)
+    card_start = cy
+    pdf.set_xy(10, cy)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 5, "Automated Interpretation")
+    cy += 7
+    for para in (commentary or []):
+        clean = _strip_html(para)
+        if not clean:
+            continue
+        pdf.set_xy(13, cy)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*DTXT)
+        pdf.multi_cell(183, 4.5, clean)
+        cy = pdf.get_y() + 2
+        if cy > 200:
+            break
+    # Draw border around commentary
+    pdf.set_fill_color(240, 120, 32)
+    pdf.rect(10, card_start - 2, 3, cy - card_start + 2, "F")
+    pdf.set_draw_color(*BDRG)
+    pdf.rect(10, card_start - 2, 190, cy - card_start + 2)
+
+    # Data quality table
+    cy += 4
+    if data_quality and cy < 240:
+        pdf.set_xy(10, cy)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*NAVY)
+        pdf.cell(0, 5, "Analysis Capability Summary")
+        cy += 7
+        dq_headers = ["Analysis", "Status", "Impact on Report", "To Unlock"]
+        dq_cws     = [52, 32, 62, 44]
+        pdf.set_fill_color(*LGRAY)
+        dx = 10
+        for dh, dcw in zip(dq_headers, dq_cws):
+            pdf.set_xy(dx, cy)
+            pdf.rect(dx, cy, dcw, 6, "FD")
+            pdf.set_xy(dx + 1, cy + 1)
+            pdf.set_font("Helvetica", "B", 6.5)
+            pdf.set_text_color(*NAVY)
+            pdf.cell(dcw - 2, 4, dh)
+            dx += dcw
+        cy += 6
+        for drow in data_quality:
+            if cy > 270:
+                break
+            analysis, (status_text, status_color_hex), _, impact, remedy = drow
+            try:
+                sc = tuple(int(status_color_hex.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+            except Exception:
+                sc = DTXT
+            dx = 10
+            row_vals = [analysis, status_text, impact, remedy]
+            for rv, dcw in zip(row_vals, dq_cws):
+                pdf.rect(dx, cy, dcw, 7, "D")
+                pdf.set_xy(dx + 1, cy + 1.5)
+                pdf.set_font("Helvetica", "B" if dx == 10 + dq_cws[0] else "", 6.5)
+                pdf.set_text_color(*(sc if dx == 10 + dq_cws[0] else DTXT))
+                pdf.multi_cell(dcw - 2, 3.5, rv)
+                dx += dcw
+            cy += 7
+
+    draw_footer(6)
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+    pdf.output(str(pdf_path))
