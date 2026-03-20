@@ -1208,6 +1208,13 @@ def build_scada_analysis_html(
 
     # ── Try Playwright (Chromium headless — installed via setup.sh) ────────
     try:
+        import subprocess as _sp
+        _sp.run(["playwright", "install", "chromium"],
+                capture_output=True, timeout=120)
+    except Exception:
+        pass
+
+    try:
         from playwright.sync_api import sync_playwright as _spw
         with _spw() as pw:
             browser = pw.chromium.launch()
