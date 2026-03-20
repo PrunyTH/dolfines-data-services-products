@@ -177,24 +177,36 @@ def build_daily_report(
     if skip_pdf:
         return None, html_path
 
-    _fpdf2_pdf(
-        pdf_path,
-        site_cfg       = site_cfg,
-        report_date    = report_date,
-        site_totals    = site_totals,
-        irradiance     = irradiance,
-        per_inv        = per_inv,
-        alerts         = alerts,
-        chart_irr      = chart_irr,
-        chart_yield    = chart_yield,
-        chart_avail    = chart_avail,
-        chart_pr       = chart_pr,
-        chart_wfall    = chart_wfall,
-        logo_b64       = logo_b64,
-        cover_img_b64  = cover_img_b64,
-        commentary     = commentary,
-        data_quality   = data_quality,
-    )
+    # ── Try WeasyPrint first (renders the HTML faithfully) ───────────────────
+    _pdf_rendered = False
+    try:
+        from weasyprint import HTML as _WP_HTML
+        _WP_HTML(string=html, base_url=str(html_path.parent)).write_pdf(str(pdf_path))
+        _pdf_rendered = True
+    except Exception:
+        pass
+
+    # ── Fallback: fpdf2 pure-Python renderer ─────────────────────────────────
+    if not _pdf_rendered:
+        _fpdf2_pdf(
+            pdf_path,
+            site_cfg       = site_cfg,
+            report_date    = report_date,
+            site_totals    = site_totals,
+            irradiance     = irradiance,
+            per_inv        = per_inv,
+            alerts         = alerts,
+            chart_irr      = chart_irr,
+            chart_yield    = chart_yield,
+            chart_avail    = chart_avail,
+            chart_pr       = chart_pr,
+            chart_wfall    = chart_wfall,
+            logo_b64       = logo_b64,
+            cover_img_b64  = cover_img_b64,
+            commentary     = commentary,
+            data_quality   = data_quality,
+        )
+
     return pdf_path, html_path
 
 
