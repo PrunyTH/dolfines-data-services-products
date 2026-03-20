@@ -529,12 +529,25 @@ def _normalise_files(mapped_result, site_type="solar") -> list:
                 # can reliably match dates regardless of original locale format
                 time_iso = pd.to_datetime(time_series, dayfirst=True, errors="coerce")
                 time_iso_str = time_iso.dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                # Detect interval so we can output PAC in kW.
+                # BJ/inverter columns are typically in kWh/interval; dividing by
+                # interval_h converts them to kW as build_scada_analysis_html expects.
+                ts_unique = time_iso.dropna().sort_values().unique()
+                if len(ts_unique) > 1:
+                    _ivl_h = (ts_unique[1] - ts_unique[0]).total_seconds() / 3600.0
+                else:
+                    _ivl_h = 5 / 60.0
+
                 frames = []
                 for pcol in power_cols:
+                    raw = pd.to_numeric(df[pcol], errors="coerce").fillna(0.0)
+                    # Heuristic: if max value < 50 treat as kWh/interval → convert to kW
+                    pac = raw / _ivl_h if (raw.max() < 50 and _ivl_h > 0) else raw
                     tmp = pd.DataFrame({
                         "Time_UDT": time_iso_str.values,
                         "EQUIP":    pcol,
-                        "PAC":      pd.to_numeric(df[pcol], errors="coerce").fillna(0.0).values,
+                        "PAC":      pac.values,
                     })
                     frames.append(tmp)
                 inv_df = pd.concat(frames, ignore_index=True)

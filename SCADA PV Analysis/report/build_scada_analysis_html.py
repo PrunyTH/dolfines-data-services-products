@@ -853,10 +853,17 @@ def _assemble_html(*, site_cfg: dict, report_date_str: str, period_str: str,
 
     # ── KPIs from overview + waterfall ──────────────────────────────────────
     total_energy = overview["energy_kwh"].sum() if "energy_kwh" in overview.columns else 0
+    # For single-day interval data, overview has ghi_w_m2 (W/m²) not irradiation_kwh_m2.
+    # Use the waterfall irradiation (correctly computed as Σ GHI × interval_h / 1000).
     total_irr    = (overview["irradiation_kwh_m2"].sum()
                     if "irradiation_kwh_m2" in overview.columns
-                    else overview["ghi_w_m2"].mean() if "ghi_w_m2" in overview.columns else 0)
-    mean_pr      = overview["pr_pct"].mean() if "pr_pct" in overview.columns else 0
+                    else wf.get("irradiation", 0))
+    # Period PR = actual / (irradiation × cap_dc) — more stable than mean of per-slot PRs
+    # which are distorted by sensor floors and low-irradiance slots.
+    _wf_irr = wf.get("irradiation", 0)
+    mean_pr = (wf.get("actual", 0) / (_wf_irr * cap_dc) * 100
+               if _wf_irr > 0 and cap_dc > 0
+               else (overview["pr_pct"].mean() if "pr_pct" in overview.columns else 0))
     spec_yield   = (total_energy / cap_dc) if cap_dc > 0 else 0
     n_high       = sum(1 for i in issues if i["severity"] == "HIGH")
     n_med        = sum(1 for i in issues if i["severity"] == "MEDIUM")
