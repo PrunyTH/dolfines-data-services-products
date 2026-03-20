@@ -154,8 +154,15 @@ def _load_xlsx_wide(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def _load_inv(data_dir: Path) -> pd.DataFrame:
+    # Excel files take priority — if xlsx has inverter data, skip CSVs entirely
+    xlsx_inv, _ = _load_xlsx_wide(data_dir)
+    if not xlsx_inv.empty:
+        xlsx_inv["Time_UDT"] = pd.to_datetime(xlsx_inv["Time_UDT"], dayfirst=True, errors="coerce")
+        xlsx_inv = xlsx_inv.dropna(subset=["Time_UDT"])
+        xlsx_inv["PAC"] = pd.to_numeric(xlsx_inv["PAC"], errors="coerce").fillna(0.0)
+        return xlsx_inv
+
     frames = []
-    # CSV files
     for p in sorted(data_dir.glob("*.csv")):
         nl = p.stem.lower()
         if any(k in nl for k in ("irr", "ghi", "irradiance", "meteo")):
@@ -172,11 +179,6 @@ def _load_inv(data_dir: Path) -> pd.DataFrame:
             frames.append(df)
         except Exception:
             continue
-    # Excel wide-format files
-    xlsx_inv, _ = _load_xlsx_wide(data_dir)
-    if not xlsx_inv.empty:
-        frames.append(xlsx_inv)
-
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
@@ -188,8 +190,15 @@ def _load_inv(data_dir: Path) -> pd.DataFrame:
 
 
 def _load_irr(data_dir: Path) -> pd.DataFrame:
+    # Excel files take priority — if xlsx has irradiance data, skip CSVs entirely
+    _, xlsx_irr = _load_xlsx_wide(data_dir)
+    if not xlsx_irr.empty:
+        xlsx_irr["Time_UDT"] = pd.to_datetime(xlsx_irr["Time_UDT"], dayfirst=True, errors="coerce")
+        xlsx_irr = xlsx_irr.dropna(subset=["Time_UDT"])
+        xlsx_irr["GHI"] = pd.to_numeric(xlsx_irr["GHI"], errors="coerce").fillna(0.0)
+        return xlsx_irr
+
     frames = []
-    # CSV files
     for p in sorted(data_dir.glob("*.csv")):
         try:
             df = pd.read_csv(p, sep=";", decimal=",", encoding="utf-8-sig", low_memory=False)
@@ -205,11 +214,6 @@ def _load_irr(data_dir: Path) -> pd.DataFrame:
             frames.append(df[["Time_UDT", "GHI"]])
         except Exception:
             continue
-    # Excel wide-format files
-    _, xlsx_irr = _load_xlsx_wide(data_dir)
-    if not xlsx_irr.empty:
-        frames.append(xlsx_irr)
-
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
@@ -318,26 +322,49 @@ def _specific_yield_pivot(inv: pd.DataFrame, cap_per_inv: float,
         return pivot / cap_per_inv
 
 
-def _monthly_overview(inv: pd.DataFrame, irr: pd.DataFrame,
-                       cap_dc: float, interval_h: float) -> pd.DataFrame:
-    rows = {}
-    # Energy
+def _period_overview(inv: pd.DataFrame, irr: pd.DataFrame,
+                     cap_dc: float, interval_h: float, freq: str = "ME") -> pd.DataFrame:
+    """Energy / irradiation / PR grouped at the granularity chosen by _choose_freq."""
+    rows: dict = {}
+    slot_min = max(1, round(interval_h * 60))
+
+    def _period_col(df: pd.DataFrame) -> pd.Series:
+        if freq == "interval":
+            return df["Time_UDT"].dt.floor(f"{slot_min}min")
+        elif freq == "D":
+            return df["Time_UDT"].dt.date
+        else:
+            return df["Time_UDT"].dt.to_period("M")
+
     if not inv.empty and "PAC" in inv.columns:
         inv = inv.copy()
-        inv["month"] = inv["Time_UDT"].dt.to_period("M")
-        rows["energy_kwh"] = inv.groupby("month")["PAC"].sum() * interval_h
-    # Irradiation
+        inv["_p"] = _period_col(inv)
+        rows["energy_kwh"] = inv.groupby("_p")["PAC"].sum() * interval_h
+
     if not irr.empty and "GHI" in irr.columns:
         irr = irr.copy()
-        irr["month"] = irr["Time_UDT"].dt.to_period("M")
-        rows["irradiation_kwh_m2"] = irr.groupby("month")["GHI"].sum() * interval_h / 1000
+        irr["_p"] = _period_col(irr)
+        if freq == "interval":
+            # Keep as W/m² (instantaneous mean per slot)
+            rows["ghi_w_m2"] = irr.groupby("_p")["GHI"].mean()
+        else:
+            rows["irradiation_kwh_m2"] = irr.groupby("_p")["GHI"].sum() * interval_h / 1000
+
     if not rows:
         return pd.DataFrame()
-    monthly = pd.DataFrame(rows)
-    if "energy_kwh" in monthly and "irradiation_kwh_m2" in monthly:
-        denom = monthly["irradiation_kwh_m2"] * cap_dc
-        monthly["pr_pct"] = (monthly["energy_kwh"] / denom.replace(0, np.nan)) * 100
-    return monthly.dropna(how="all")
+    overview = pd.DataFrame(rows)
+
+    if "energy_kwh" in overview:
+        if "irradiation_kwh_m2" in overview:
+            denom = overview["irradiation_kwh_m2"] * cap_dc
+            overview["pr_pct"] = overview["energy_kwh"] / denom.replace(0, np.nan) * 100
+        elif "ghi_w_m2" in overview:
+            # PR = actual_kW / reference_kW  (reference = GHI/1000 * cap_dc)
+            actual_kw = overview["energy_kwh"] / interval_h
+            ref_kw    = overview["ghi_w_m2"] / 1000 * cap_dc
+            overview["pr_pct"] = actual_kw / ref_kw.replace(0, np.nan) * 100
+
+    return overview.dropna(how="all")
 
 
 def _waterfall(inv: pd.DataFrame, irr: pd.DataFrame,
@@ -486,46 +513,83 @@ def chart_completeness(pivot: pd.DataFrame, freq: str = "D") -> str:
     return _b64_png(fig)
 
 
-def chart_monthly_overview(monthly: pd.DataFrame, pr_target: float) -> str:
-    if monthly.empty:
+def chart_period_overview(overview: pd.DataFrame, pr_target: float,
+                           freq: str = "ME") -> str:
+    if overview.empty:
         return ""
-    months = [str(m) for m in monthly.index]
-    x = np.arange(len(months))
+
+    x_labels = [str(m) for m in overview.index]
+    x = np.arange(len(x_labels))
+
+    # Axis labels / units depend on freq
+    if freq == "interval":
+        energy_col   = "energy_kwh"
+        energy_label = "Energy (kWh)"
+        irr_col      = "ghi_w_m2"
+        irr_label    = "GHI (W/m\u00b2)"
+        title        = "Intra-day Energy, GHI & Performance Ratio"
+        marker_size  = 3
+        bar_offset   = 0.15
+    elif freq == "D":
+        energy_col   = "energy_kwh"
+        energy_label = "Energy (kWh)"
+        irr_col      = "irradiation_kwh_m2"
+        irr_label    = "Irradiation (kWh/m\u00b2)"
+        title        = "Daily Energy, Irradiation & Performance Ratio"
+        marker_size  = 5
+        bar_offset   = 0.2
+    else:  # ME
+        energy_col   = "energy_kwh"
+        energy_label = "Energy (MWh)"
+        irr_col      = "irradiation_kwh_m2"
+        irr_label    = "Irradiation (kWh/m\u00b2)"
+        title        = "Monthly Energy, Irradiation & Performance Ratio"
+        marker_size  = 6
+        bar_offset   = 0.2
 
     fig, ax1 = plt.subplots(figsize=(11, 4.8))
     _apply_spine(ax1)
 
     # Energy bars
-    if "energy_kwh" in monthly.columns:
-        energy_mwh = monthly["energy_kwh"] / 1000
-        bars = ax1.bar(x - 0.2, energy_mwh, width=0.4,
-                       color=_T["orange"], alpha=0.88, label="Energy (MWh)", zorder=2)
-        ax1.set_ylabel("Energy (MWh)", color=_T["text"], fontsize=9)
-        ax1.set_ylim(0, max(energy_mwh.max() * 1.4, 0.1))
-        for bar, v in zip(bars, energy_mwh):
-            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + energy_mwh.max()*0.02,
-                     f"{v:.1f}", ha="center", va="bottom", fontsize=7, color=_T["text"])
+    ax_irr = None
+    ax_pr  = None
+    if energy_col in overview.columns:
+        raw = overview[energy_col]
+        ev  = raw / 1000 if freq == "ME" else raw   # MWh for monthly, kWh otherwise
+        ev_max = max(ev.max(), 0.1)
+        bars = ax1.bar(x - bar_offset, ev, width=bar_offset * 2,
+                       color=_T["orange"], alpha=0.88, label=energy_label, zorder=2)
+        ax1.set_ylabel(energy_label, color=_T["text"], fontsize=9)
+        ax1.set_ylim(0, ev_max * 1.45)
+        # Value labels only when not too many bars
+        if len(x) <= 50:
+            for bar, v in zip(bars, ev):
+                ax1.text(bar.get_x() + bar.get_width() / 2,
+                         bar.get_height() + ev_max * 0.02,
+                         f"{v:.1f}", ha="center", va="bottom", fontsize=6.5,
+                         color=_T["text"])
 
-    # Irradiation bars
-    if "irradiation_kwh_m2" in monthly.columns:
+    # Irradiance / irradiation bars
+    if irr_col in overview.columns:
         ax_irr = ax1.twinx()
-        ax_irr.bar(x + 0.2, monthly["irradiation_kwh_m2"], width=0.4,
-                   color=_T["slate"], alpha=0.55, label="Irradiation (kWh/m²)", zorder=2)
-        ax_irr.set_ylabel("Irradiation (kWh/m²)", color=_T["slate"], fontsize=9)
+        iv = overview[irr_col]
+        ax_irr.bar(x + bar_offset, iv, width=bar_offset * 2,
+                   color=_T["slate"], alpha=0.55, label=irr_label, zorder=2)
+        ax_irr.set_ylabel(irr_label, color=_T["slate"], fontsize=9)
         ax_irr.spines["top"].set_visible(False)
         ax_irr.spines["left"].set_visible(False)
         ax_irr.tick_params(colors=_T["slate"], labelsize=8.5)
         ax_irr.grid(False)
-    else:
-        ax_irr = None
 
     # PR line
-    if "pr_pct" in monthly.columns:
+    if "pr_pct" in overview.columns:
         ax_pr = ax1.twinx()
         if ax_irr:
             ax_pr.spines["right"].set_position(("axes", 1.10))
-        ax_pr.plot(x, monthly["pr_pct"].clip(0, 120), color=_T["green"],
-                   marker="o", linewidth=2, zorder=4, label="PR (%)")
+        pr_vals = overview["pr_pct"].clip(0, 120)
+        ax_pr.plot(x, pr_vals, color=_T["green"],
+                   marker="o", markersize=marker_size, linewidth=1.5,
+                   zorder=4, label="PR (%)")
         ax_pr.axhline(pr_target * 100, color=_T["green"], linestyle=":",
                       linewidth=1, alpha=0.7)
         ax_pr.set_ylabel("PR (%)", color=_T["green"], fontsize=9)
@@ -535,18 +599,20 @@ def chart_monthly_overview(monthly: pd.DataFrame, pr_target: float) -> str:
         ax_pr.tick_params(colors=_T["green"], labelsize=8.5)
         ax_pr.grid(False)
 
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(months, rotation=45, ha="right", fontsize=8)
-    ax1.set_title("Monthly Energy, Irradiation and Performance Ratio",
-                  color=_T["navy"], fontsize=10, fontweight="bold", pad=8)
+    # X-axis ticks — limit labels when many points
+    max_ticks = 30 if freq == "interval" else len(x)
+    step = max(1, len(x) // max_ticks)
+    ax1.set_xticks(x[::step])
+    ax1.set_xticklabels(x_labels[::step], rotation=45, ha="right", fontsize=8)
+    ax1.set_title(title, color=_T["navy"], fontsize=10, fontweight="bold", pad=8)
 
     # Unified legend
-    handles, labels = ax1.get_legend_handles_labels()
-    for _ax in [ax_irr, ax_pr if "ax_pr" in dir() else None]:
-        if _ax:
-            h, l = _ax.get_legend_handles_labels()
-            handles += h; labels += l
-    ax1.legend(handles, labels, loc="upper left", fontsize=8, framealpha=0.9)
+    handles, lbls = ax1.get_legend_handles_labels()
+    for _axx in [ax_irr, ax_pr]:
+        if _axx:
+            h, l = _axx.get_legend_handles_labels()
+            handles += h; lbls += l
+    ax1.legend(handles, lbls, loc="upper left", fontsize=8, framealpha=0.9)
 
     fig.patch.set_facecolor("white")
     plt.tight_layout()
@@ -596,46 +662,52 @@ def chart_specific_yield(pivot: pd.DataFrame, freq: str = "D") -> str:
 
 def chart_waterfall(wf: dict) -> str:
     ref    = wf.get("reference", 0)
-    target = wf.get("target", 0)
-    actual = wf.get("actual",   0)
+    target = wf.get("target",    0)
+    actual = wf.get("actual",    0)
     if ref <= 0:
         return ""
 
-    labels = ["Reference\nEnergy", "Efficiency\n& Temp Loss",
-              "Operational\nLoss", "Actual\nEnergy"]
-    pr_loss   = wf.get("pr_loss",   0)
-    opex_loss = wf.get("opex_loss", 0)
+    pr_loss   = wf.get("pr_loss",   0)   # = ref - target  (always ≥ 0)
+    opex_loss = wf.get("opex_loss", 0)   # = max(0, target - actual)
 
-    # (value, bottom, color)
+    # Choose display unit: kWh if ref < 5000 kWh, else MWh
+    if ref < 5000:
+        scale, unit = 1.0, "kWh"
+        fmt = lambda v: f"{v:,.0f}"
+    else:
+        scale, unit = 1000.0, "MWh"
+        fmt = lambda v: f"{v/1000:,.1f}"
+
+    # Bars: (height, bottom, color, label)
+    # Amber bar bottom MUST be target (= ref - pr_loss), not actual
     bars = [
-        (ref,       0,                                  _T["navy"]),
-        (pr_loss,   actual + opex_loss,                 _T["amber"]),
-        (opex_loss, actual,                             _T["red"]),
-        (actual,    0,                                  _T["green"]),
+        (ref,       0,      _T["navy"],  "Reference\nEnergy"),
+        (pr_loss,   target, _T["amber"], "Efficiency\n& Temp Loss"),
+        (opex_loss, actual, _T["red"],   "Operational\nLoss"),
+        (actual,    0,      _T["green"], "Actual\nEnergy"),
     ]
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    for i, (val, bot, col) in enumerate(bars):
+    for i, (val, bot, col, _lbl) in enumerate(bars):
+        if val <= 0:
+            continue
         ax.bar(i, val, bottom=bot, color=col, alpha=0.88, width=0.55, zorder=2,
                edgecolor="white", linewidth=0.5)
         mid = bot + val / 2
-        ax.text(i, mid, f"{val/1000:,.1f}", ha="center", va="center",
+        ax.text(i, mid, fmt(val), ha="center", va="center",
                 fontsize=9, color="white", fontweight="bold")
 
-    # Connector lines
-    for i in range(len(bars) - 1):
-        v0, b0, _ = bars[i]
-        v1, b1, _ = bars[i + 1]
-        top0 = b0 + v0
-        top1 = b1 + v1
-        connect_y = top1 if i < 2 else top0
-        ax.plot([i + 0.275, i + 0.725], [connect_y, connect_y],
+    # Connector lines (dashed, at the top of each segment)
+    connector_ys = [ref, target, actual]
+    for i, y in enumerate(connector_ys):
+        ax.plot([i + 0.275, i + 0.725], [y, y],
                 color=_T["border"], linewidth=0.8, linestyle="--", zorder=1)
 
     ax.set_xticks(range(4))
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("Energy (MWh)", fontsize=9, color=_T["text"])
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v/1000:,.0f}"))
+    ax.set_xticklabels([b[3] for b in bars], fontsize=9)
+    ax.set_ylabel(f"Energy ({unit})", fontsize=9, color=_T["text"])
+    ax.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda v, _: f"{v:,.0f}" if scale == 1.0 else f"{v/1000:,.0f}"))
     ax.set_title("Energy Loss Waterfall",
                  color=_T["navy"], fontsize=10, fontweight="bold", pad=8)
     _apply_spine(ax)
@@ -704,7 +776,7 @@ def _assemble_html(*, site_cfg: dict, report_date_str: str, period_str: str,
                    logo_b64: str, cover_img_b64: str,
                    img_completeness: str, img_monthly: str,
                    img_sy: str, img_waterfall: str,
-                   monthly: pd.DataFrame, wf: dict,
+                   overview: pd.DataFrame, wf: dict,
                    issues: list[dict], pr_target: float) -> str:
 
     report_css, print_css = _load_static_css()
@@ -724,10 +796,12 @@ def _assemble_html(*, site_cfg: dict, report_date_str: str, period_str: str,
 
     hdr = _header(logo_b64, site_name, report_title)
 
-    # ── KPIs from monthly + waterfall ──────────────────────────────────────
-    total_energy = monthly["energy_kwh"].sum() if "energy_kwh" in monthly.columns else 0
-    total_irr    = monthly["irradiation_kwh_m2"].sum() if "irradiation_kwh_m2" in monthly.columns else 0
-    mean_pr      = monthly["pr_pct"].mean() if "pr_pct" in monthly.columns else 0
+    # ── KPIs from overview + waterfall ──────────────────────────────────────
+    total_energy = overview["energy_kwh"].sum() if "energy_kwh" in overview.columns else 0
+    total_irr    = (overview["irradiation_kwh_m2"].sum()
+                    if "irradiation_kwh_m2" in overview.columns
+                    else overview["ghi_w_m2"].mean() if "ghi_w_m2" in overview.columns else 0)
+    mean_pr      = overview["pr_pct"].mean() if "pr_pct" in overview.columns else 0
     spec_yield   = (total_energy / cap_dc) if cap_dc > 0 else 0
     n_high       = sum(1 for i in issues if i["severity"] == "HIGH")
     n_med        = sum(1 for i in issues if i["severity"] == "MEDIUM")
@@ -1003,7 +1077,7 @@ def build_scada_analysis_html(
     freq       = _choose_freq(inv)
     comp_pivot = _completeness_pivot(inv, interval_h, freq)
     sy_pivot   = _specific_yield_pivot(inv, cap_per_inv, interval_h, freq)
-    monthly    = _monthly_overview(inv, irr, cap_dc, interval_h)
+    overview   = _period_overview(inv, irr, cap_dc, interval_h, freq)
     wf         = _waterfall(inv, irr, cap_dc, pr_target, interval_h)
     issues     = _punchlist(inv, irr, site_cfg, interval_h)
 
@@ -1017,7 +1091,7 @@ def build_scada_analysis_html(
 
     # ── Charts ────────────────────────────────────────────────────────────
     img_completeness = chart_completeness(comp_pivot, freq)
-    img_monthly      = chart_monthly_overview(monthly, pr_target)
+    img_monthly      = chart_period_overview(overview, pr_target, freq)
     img_sy           = chart_specific_yield(sy_pivot, freq)
     img_wf           = chart_waterfall(wf)
 
@@ -1044,7 +1118,7 @@ def build_scada_analysis_html(
         img_monthly      = img_monthly,
         img_sy           = img_sy,
         img_waterfall    = img_wf,
-        monthly          = monthly,
+        overview         = overview,
         wf               = wf,
         issues           = issues,
         pr_target        = pr_target,
