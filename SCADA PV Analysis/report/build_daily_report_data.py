@@ -991,6 +991,61 @@ figcaption { font-size: 7.5pt; color: #6B7785; margin-top: 4px; }
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
-    """Generate PDF using WeasyPrint (pure-Python, no browser required)."""
-    import weasyprint
-    weasyprint.HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+    """
+    Generate PDF via Playwright screenshots assembled with Pillow.
+
+    Chromium's PDF renderer on Linux has a known bug that makes HTML text
+    invisible. Screenshots render text correctly, so we screenshot each page
+    and assemble into a PDF using Pillow (no native system libs required).
+    """
+    # A4 at 96 dpi: 794 × 1123 px
+    A4_W, A4_H = 794, 1123
+
+    script = f"""
+import asyncio, base64, json, sys
+from playwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            args=["--no-sandbox", "--disable-dev-shm-usage",
+                  "--disable-setuid-sandbox", "--disable-gpu"]
+        )
+        page = await browser.new_page(viewport={{"width": {A4_W}, "height": {A4_H}}})
+        html = open(r"{html_path}", encoding="utf-8").read()
+        await page.set_content(html, wait_until="networkidle")
+
+        n = await page.evaluate(
+            "document.querySelectorAll('.page, .cover-page').length"
+        )
+        if not n:
+            n = 1
+
+        shots = []
+        for i in range(n):
+            clip = {{"x": 0, "y": i * {A4_H}, "width": {A4_W}, "height": {A4_H}}}
+            png = await page.screenshot(clip=clip, full_page=False)
+            shots.append(base64.b64encode(png).decode())
+
+        await browser.close()
+        print(json.dumps(shots))
+
+asyncio.run(main())
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True, text=True, timeout=180,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Playwright screenshot failed:\n{result.stderr}")
+
+    import json as _json, base64 as _b64
+    from io import BytesIO
+    from PIL import Image
+
+    shots = _json.loads(result.stdout)
+    imgs = [Image.open(BytesIO(_b64.b64decode(s))).convert("RGB") for s in shots]
+    imgs[0].save(
+        str(pdf_path), "PDF", resolution=96.0,
+        save_all=True, append_images=imgs[1:],
+    )
