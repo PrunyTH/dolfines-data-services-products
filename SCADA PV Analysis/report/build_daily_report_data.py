@@ -998,6 +998,12 @@ def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
     invisible. Screenshots render text correctly, so we screenshot each page
     and assemble into a PDF using Pillow (no native system libs required).
     """
+    # Ensure Chromium binary is present for the current user
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        capture_output=True, text=True, timeout=180,
+    )
+
     # A4 at 96 dpi: 794 × 1123 px
     A4_W, A4_H = 794, 1123
 
