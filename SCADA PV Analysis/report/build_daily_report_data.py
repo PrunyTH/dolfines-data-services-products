@@ -497,7 +497,9 @@ def _render_html(*, site_cfg, report_date, logo_b64, cover_img_b64="", irradianc
   --c-err:  #C62828;
   --font:   Aptos, Calibri, Arial, Helvetica, sans-serif;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important; }
 body { font-family: var(--font, Arial, sans-serif); font-size: 9pt; color: var(--c-txt, #1F2933); background: #fff; }
 @page { size: A4; margin: 0; }
 .page { position: relative; min-height: 297mm; background: #fff;
@@ -1002,9 +1004,13 @@ from playwright.async_api import async_playwright
 
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch()
+        browser = await p.chromium.launch(
+            args=["--no-sandbox", "--disable-dev-shm-usage",
+                  "--disable-setuid-sandbox", "--disable-gpu"]
+        )
         page = await browser.new_page()
-        await page.goto("file:///{html_path.as_posix()}", wait_until="networkidle")
+        html_content = open(r"{html_path}", encoding="utf-8").read()
+        await page.set_content(html_content, wait_until="networkidle")
         await page.pdf(
             path=r"{pdf_path}",
             format="A4",
