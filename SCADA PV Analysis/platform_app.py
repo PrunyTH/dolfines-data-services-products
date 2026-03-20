@@ -18,18 +18,6 @@ from PIL import Image
 import streamlit as st
 
 
-# ── Playwright browser auto-install (needed on Streamlit Cloud) ────────────
-@st.cache_resource(show_spinner=False)
-def _ensure_playwright() -> bool:
-    """Install Chromium browser binary if not already present. Cached once per session."""
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True, text=True, timeout=120,
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR   = Path(__file__).parent
@@ -1154,9 +1142,6 @@ def _view_daily_config():
             else:
                 st.error("Could not write uploaded files to a temp directory.")
         else:
-            with st.spinner("Installing browser runtime… (first run only, ~30 s)"):
-                pw_ok = _ensure_playwright()
-
             with st.spinner("Analysing data and generating report…"):
                 try:
                     from report.build_daily_report_data import build_daily_report
@@ -1165,7 +1150,6 @@ def _view_daily_config():
                         site_cfg    = site,
                         report_date = report_date,
                         data_dir    = tmp_data_dir,
-                        skip_pdf    = not pw_ok,
                     )
 
                     if pdf_path and pdf_path.exists():

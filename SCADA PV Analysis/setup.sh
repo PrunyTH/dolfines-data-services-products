@@ -1,3 +1,2 @@
 #!/bin/bash
-# Install Playwright Chromium browser for PDF generation
-playwright install chromium
+# No-op: PDF generation uses WeasyPrint (pure Python), no browser install needed
