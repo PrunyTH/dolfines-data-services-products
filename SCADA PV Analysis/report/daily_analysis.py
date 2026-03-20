@@ -211,6 +211,16 @@ class DailyAnalysis:
 
         ts = irr_day.set_index("Time_UDT")["GHI"].sort_index()
         ts = ts.clip(lower=0)
+
+        # Auto-detect actual interval from timestamps (don't trust cfg value)
+        if len(ts) > 1:
+            interval_h = (ts.index[1] - ts.index[0]).total_seconds() / 3600.0
+
+        # Auto-detect Wh/m² per-interval values (e.g. max ~86 for 5-min slots)
+        # and convert to W/m² instantaneous by dividing by hours-per-interval
+        if 0 < ts.max() < 200:
+            ts = ts / interval_h  # Wh/interval  -->  W/m²
+
         insolation = ts.sum() * interval_h / 1000.0   # kWh/m²
         peak_ghi   = ts.max()
         daylight   = (ts >= irr_threshold).sum() * interval_h

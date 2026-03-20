@@ -1074,8 +1074,8 @@ def _fpdf2_pdf(
     from fpdf import FPDF
 
     # ── Colours ───────────────────────────────────────────────────────────────
-    NAVY   = (0,   61,  107)
-    ORANGE = (240, 120,  32)
+    NAVY   = ( 11,  42,  61)   # #0B2A3D
+    ORANGE = (243, 146,   0)   # #F39200
     LGRAY  = (244, 246, 248)
     DTXT   = ( 31,  41,  51)
     MGRAY  = (107, 119, 133)
@@ -1173,7 +1173,7 @@ def _fpdf2_pdf(
             pdf.set_text_color(*MGRAY)
             pdf.cell(0, 5, sub)
 
-    # ── Shared: KPI card ──────────────────────────────────────────────────────
+    # ── Shared: KPI card (used for secondary row) ─────────────────────────────
     def kpi_card(x, y, w, h, label, value, sub, val_color=NAVY):
         pdf.set_fill_color(*LGRAY)
         pdf.rect(x, y, w, h, "F")
@@ -1191,6 +1191,38 @@ def _fpdf2_pdf(
         pdf.set_font("Helvetica", "", 6)
         pdf.set_text_color(*MGRAY)
         pdf.cell(w - 4, 4, str(sub))
+
+    # ── Orange KPI banner (primary KPIs, white text on orange) ───────────────
+    CREAM = (255, 230, 170)  # label tint inside orange banner
+
+    def kpi_banner(x, y, w, h, kpis):
+        """Draw a single orange banner containing multiple KPI slots."""
+        pdf.set_fill_color(*ORANGE)
+        pdf.rect(x, y, w, h, "F")
+        slot_w = w / len(kpis)
+        for i, (label, value, sub) in enumerate(kpis):
+            sx = x + i * slot_w
+            # divider
+            if i > 0:
+                pdf.set_draw_color(*WHITE)
+                pdf.set_line_width(0.2)
+                pdf.line(sx, y + 4, sx, y + h - 4)
+                pdf.set_line_width(0.2)
+            # label
+            pdf.set_xy(sx, y + 3)
+            pdf.set_font("Helvetica", "B", 6)
+            pdf.set_text_color(*CREAM)
+            pdf.cell(slot_w, 4, label.upper(), align="C")
+            # value
+            pdf.set_xy(sx, y + 8)
+            pdf.set_font("Helvetica", "B", 13)
+            pdf.set_text_color(*WHITE)
+            pdf.cell(slot_w, 8, str(value), align="C")
+            # sub
+            pdf.set_xy(sx, y + 17)
+            pdf.set_font("Helvetica", "", 6)
+            pdf.set_text_color(*CREAM)
+            pdf.cell(slot_w, 4, str(sub), align="C")
 
     # ─────────────────────────────────────────────────────────────────────────
     # PAGE 1 — COVER
@@ -1282,22 +1314,20 @@ def _fpdf2_pdf(
     alert_txt = f"{high_c}H / {med_c}M" if (high_c or med_c) else "None"
     alert_col = RED if high_c else AMBER if med_c else GREEN
 
+    # Primary KPI banner (orange, white text)
     kpis5 = [
-        ("Total Energy",     f"{site_totals['total_energy_kwh']:,.0f}", "kWh",             NAVY),
-        ("Specific Yield",   f"{site_totals['spec_yield']:.3f}",        "kWh/kWp",         NAVY),
-        ("Perf. Ratio",      f"{site_totals['pr_pct']:.1f}%",           f"Target {site_totals['pr_target_pct']:.0f}%",
-         pr_color(site_totals["pr_pct"])),
-        ("Fleet Avail.",     f"{site_totals['availability_pct']:.1f}%", "daylight hours",
-         avail_color(site_totals["availability_pct"])),
-        ("Alerts",           alert_txt,                                  "today",           alert_col),
+        ("Total Energy",   f"{site_totals['total_energy_kwh']:,.0f} kWh",  "production today"),
+        ("Specific Yield", f"{site_totals['spec_yield']:.3f}",             "kWh/kWp"),
+        ("Perf. Ratio",    f"{site_totals['pr_pct']:.1f}%",               f"Target {site_totals['pr_target_pct']:.0f}%"),
+        ("Fleet Avail.",   f"{site_totals['availability_pct']:.1f}%",      "daylight hours"),
+        ("Alerts",         alert_txt,                                       "today"),
     ]
-    cw = 37.5
-    for i, (lbl, val, sub, col) in enumerate(kpis5):
-        kpi_card(10 + i * (cw + 1), 40, cw, 22, lbl, val, sub, col)
+    kpi_banner(10, 40, 190, 26, kpis5)
 
+    # Secondary row: irradiance + energy delta (navy cards)
     kpis3 = [
-        ("Insolation",        f"{irradiance['insolation_kwh_m2']:.2f}",  "kWh/m2", NAVY),
-        ("Peak GHI",          f"{irradiance['peak_ghi']:.0f}",           "W/m2",   NAVY),
+        ("Insolation",         f"{irradiance['insolation_kwh_m2']:.2f}",  "kWh/m2", NAVY),
+        ("Peak GHI",           f"{irradiance['peak_ghi']:.0f}",           "W/m2",   NAVY),
         ("Energy vs Expected",
          f"{'+' if site_totals['energy_delta_kwh']>=0 else ''}{site_totals['energy_delta_kwh']:,.0f}",
          "kWh vs target PR",
@@ -1305,11 +1335,11 @@ def _fpdf2_pdf(
     ]
     cw3 = 62
     for i, (lbl, val, sub, col) in enumerate(kpis3):
-        kpi_card(10 + i * (cw3 + 2), 65, cw3, 22, lbl, val, sub, col)
+        kpi_card(10 + i * (cw3 + 2), 70, cw3, 22, lbl, val, sub, col)
 
     cb = chart_bytes(chart_irr)
     if cb:
-        pdf.image(cb, x=10, y=90, w=190)
+        pdf.image(cb, x=10, y=95, w=190)
 
     draw_footer(2)
 
@@ -1392,7 +1422,7 @@ def _fpdf2_pdf(
     pdf.set_fill_color(251, 252, 253)
     pdf.set_draw_color(*BDRG)
     pdf.rect(10, 42, 190, 20, "FD")
-    pdf.set_draw_color(240, 120, 32)
+    pdf.set_fill_color(*ORANGE)
     pdf.rect(10, 42, 3, 20, "F")
     pdf.set_draw_color(*BDRG)
     pdf.set_xy(15, 44)
