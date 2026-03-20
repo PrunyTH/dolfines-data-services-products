@@ -1205,15 +1205,11 @@ def build_scada_analysis_html(
 
     pdf_path = out_path.with_suffix(".pdf")
 
-    # ── Try WeasyPrint (Linux / system-lib install) ────────────────────────
-    try:
-        from weasyprint import HTML as _WP_HTML
-        _WP_HTML(string=html, base_url=str(out_path.parent)).write_pdf(str(pdf_path))
-        return pdf_path, out_path
-    except Exception:
-        pass
-
     # ── Try Playwright (Chromium headless — installed via setup.sh) ────────
+    # Use set_content() + emulate_media("screen") so the PDF renders exactly
+    # as the HTML looks in a browser: correct background colours, white text,
+    # embedded fonts.  page.goto(file://) triggers @media print which strips
+    # backgrounds and leaves white text invisible on a white page.
     try:
         import subprocess as _sp
         _sp.run(["playwright", "install", "chromium"],
@@ -1225,16 +1221,25 @@ def build_scada_analysis_html(
         from playwright.sync_api import sync_playwright as _spw
         with _spw() as pw:
             browser = pw.chromium.launch()
-            page    = browser.new_page()
-            page.goto(out_path.resolve().as_uri(), wait_until="networkidle")
+            page    = browser.new_page(viewport={"width": 1240, "height": 1754})
+            page.emulate_media(media="screen")
+            page.set_content(html, wait_until="networkidle")
             page.pdf(
-                path           = str(pdf_path),
-                format         = "A4",
+                path             = str(pdf_path),
+                format           = "A4",
                 print_background = True,
-                margin         = {"top": "0", "bottom": "0",
-                                  "left": "0", "right": "0"},
+                margin           = {"top": "0", "bottom": "0",
+                                    "left": "0", "right": "0"},
             )
             browser.close()
+        return pdf_path, out_path
+    except Exception:
+        pass
+
+    # ── Fallback: WeasyPrint (Linux system-lib install) ────────────────────
+    try:
+        from weasyprint import HTML as _WP_HTML
+        _WP_HTML(string=html, base_url=str(out_path.parent)).write_pdf(str(pdf_path))
         return pdf_path, out_path
     except Exception:
         pass
