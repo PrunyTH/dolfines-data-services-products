@@ -1001,18 +1001,17 @@ def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
         capture_output=True, text=True, timeout=180,
     )
 
+    # Use as_uri() + page.goto() exactly like render_report.py — page.set_content()
+    # bypasses Chromium's font resolver, causing invisible text in the PDF.
+    file_uri = html_path.resolve().as_uri()
     script = f"""
 import sys
 from playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(
-        args=["--no-sandbox", "--disable-dev-shm-usage",
-              "--disable-setuid-sandbox", "--disable-gpu"]
-    )
+    browser = p.chromium.launch()
     page = browser.new_page()
-    html = open(r"{html_path}", encoding="utf-8").read()
-    page.set_content(html, wait_until="networkidle")
+    page.goto({file_uri!r}, wait_until="networkidle")
     page.emulate_media(media="print")
     page.wait_for_function(
         "Array.from(document.images).every((img) => img.complete)"
