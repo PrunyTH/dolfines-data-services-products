@@ -991,36 +991,10 @@ figcaption { font-size: 7.5pt; color: #6B7785; margin-top: 4px; }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLAYWRIGHT PDF CONVERSION
+# WEASYPRINT PDF CONVERSION
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
-    """Call Playwright via subprocess (same approach as run_jinja_report.py)."""
-    script = f"""
-import asyncio
-from playwright.async_api import async_playwright
-
-async def main():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            args=["--no-sandbox", "--disable-dev-shm-usage",
-                  "--disable-setuid-sandbox", "--disable-gpu"]
-        )
-        page = await browser.new_page()
-        html_content = open(r"{html_path}", encoding="utf-8").read()
-        await page.set_content(html_content, wait_until="networkidle")
-        await page.pdf(
-            path=r"{pdf_path}",
-            format="A4",
-            print_background=True,
-        )
-        await browser.close()
-
-asyncio.run(main())
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True, text=True, timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Playwright PDF failed:\n{result.stderr}")
+    """Generate PDF using WeasyPrint (pure-Python, no browser required)."""
+    import weasyprint
+    weasyprint.HTML(filename=str(html_path)).write_pdf(str(pdf_path))
