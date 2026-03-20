@@ -1237,16 +1237,15 @@ def _count(v):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VIEW: COMPREHENSIVE REPORT — DATA SUBMISSION
+# VIEW: COMPREHENSIVE REPORT — AUTO-GENERATE
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _view_comp_info():
-    import io as _io, json as _json, zipfile as _zip
-    from datetime import datetime as _dt
+    import shutil as _shutil, tempfile as _tmpfile
+    from pathlib import Path as _Path
 
     _sync_custom_sites()
     _render_header()
-    user    = st.session_state["user"]
     site_id = st.session_state.get("selected_site", "")
     site    = SITES.get(site_id, {})
 
@@ -1261,182 +1260,113 @@ def _view_comp_info():
             st.rerun()
 
     st.markdown(
-        f"<div class='step-hdr'>Comprehensive Report — {site.get('display_name','')}</div>",
+        f"<div class='step-hdr'>Comprehensive SCADA Analysis — {site.get('display_name','')}</div>",
         unsafe_allow_html=True)
 
     st.markdown("""
-    <p style="color:rgba(255,255,255,0.75);font-size:0.90rem;margin-bottom:0.4rem;">
-      Upload your SCADA export files below. Once submitted, the 8p2 team will run the
-      full analysis pipeline and deliver your PDF report within the agreed timeframe.
+    <p style="color:rgba(255,255,255,0.75);font-size:0.90rem;margin-bottom:1.2rem;">
+      Upload your SCADA export files (CSV or Excel) and click <strong>Generate</strong>.
+      The platform will produce a full multi-section PDF report — completeness heatmap,
+      energy &amp; irradiance overview, per-inverter specific yield, loss waterfall, and
+      action punchlist — in seconds.
     </p>""", unsafe_allow_html=True)
 
-    # ── Setup ──────────────────────────────────────────────────────────────────
-    st.markdown("<div class='sub-hdr'>Data Configuration</div>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        data_years = st.multiselect(
-            "Years covered by the data",
-            [str(y) for y in range(2019, 2027)], default=[])
-    with c2:
-        notes = st.text_area(
-            "Notes for the analysis team (optional)",
-            placeholder="Known data gaps, curtailment periods, maintenance events…",
-            height=110)
-
-    # ── SCADA data files + column mapping ───────────────────────────────────────
-    st.markdown("<div class='sub-hdr'>SCADA Data Files</div>", unsafe_allow_html=True)
-    st.caption(
-        "Upload one or more CSV / Excel files. Each file can contain time, "
-        "power (all selected inverter/combiner columns are summed) and irradiance "
-        "columns. The platform auto-detects columns — adjust if needed."
-    )
+    # ── Data source ────────────────────────────────────────────────────────────
     _ACCEPTED_COMP = ["csv", "xlsx", "xls", "txt"]
+    st.markdown("<div class='sub-hdr'>Upload SCADA Data</div>", unsafe_allow_html=True)
+    st.caption(
+        "Upload one or more CSV / Excel files containing timestamped inverter power "
+        "(or energy) and irradiance. The report adapts automatically to the time span "
+        "of your data — day, month, or multi-year."
+    )
     comp_uploaded = st.file_uploader(
         "SCADA data files (CSV / Excel)",
         type=_ACCEPTED_COMP, accept_multiple_files=True, key="comp_scada") or []
 
-    comp_mapped = None
+    tmp_data_dir = None
+    _files_pending = False
+
     if comp_uploaded:
         st.markdown("<div class='sub-hdr'>Column Mapping</div>", unsafe_allow_html=True)
         comp_mapped = _show_column_mapper(comp_uploaded, site_type="solar",
                                           state_key="cm_comp")
+        _files_pending = comp_mapped is None
+        if _files_pending:
+            st.info("✏️ Confirm the column mapping above, then click Generate.")
+    else:
+        comp_mapped = None
+        raw_dir = site.get("data_dir")
+        if raw_dir and _Path(raw_dir).exists():
+            tmp_data_dir = _Path(raw_dir)
 
-    # ── Other ───────────────────────────────────────────────────────────────────
-    st.markdown("<div class='sub-hdr'>Additional Data (optional)</div>",
-                unsafe_allow_html=True)
-    st.caption("Alarm/fault exports, grid metering, curtailment logs, maintenance records, "
-               "string data, single-line diagram, site photos…")
-    other_files = st.file_uploader(
-        "Additional files (CSV, PDF, XLSX, JPG, PNG…)",
-        type=["csv","pdf","xlsx","xls","docx","jpg","jpeg","png"],
-        accept_multiple_files=True, key="comp_other") or []
-
-    # ── Validation & summary ────────────────────────────────────────────────────
     st.divider()
-    errors = []
-    _comp_pending = bool(comp_uploaded and comp_mapped is None)
-    if not comp_uploaded:
-        errors.append("At least one SCADA data file must be uploaded.")
-    if _comp_pending:
-        st.info("✏️ Confirm the column mapping above, then submit.")
 
-    n_inv  = len(comp_uploaded)
-    n_irr  = 0   # irradiance comes from column mapping, not a separate uploader
-    n_oth  = len(other_files)
-
-    with st.expander(f"📍 {site.get('display_name','')} — submission summary",
-                     expanded=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(f"{'✅' if n_inv else '⚠️'} **SCADA files:** {n_inv} file(s)")
-            st.markdown(f"{'✅' if comp_mapped else ('⏳' if comp_uploaded else '⚠️')} "
-                        f"**Column mapping:** {'confirmed' if comp_mapped else ('pending' if comp_uploaded else 'no files')}")
-        with c2:
-            st.markdown(f"{'✅' if n_oth else '—'} **Other data:** {n_oth} file(s)")
-            cap_dc_mw = site.get("cap_dc_kwp", 0) / 1000
-            cap_ac_mw = site.get("cap_ac_kw",  0) / 1000
-            n_inv = site.get("n_inverters", 0)
-            if n_inv:
-                st.markdown(f"🏭 **{n_inv} inverters** × "
-                            f"{site.get('inv_ac_kw',0):.0f} kW = "
-                            f"{cap_ac_mw:.2f} MW AC")
-            else:
-                st.markdown(f"🏭 **{cap_dc_mw:.2f} MWp DC** "
-                            f"({cap_ac_mw:.2f} MW AC)")
-        with c3:
-            st.markdown(f"📍 {site.get('region','')}, {site.get('country','')}")
-            st.markdown(f"📅 COD: {site.get('cod','—')}")
-            if data_years:
-                st.markdown(f"📆 Data years: {', '.join(data_years)}")
-
-    for e in errors:
-        st.error(e)
-
-    col_btn, _ = st.columns([2, 5])
-    with col_btn:
-        submit = st.button("📤  Submit Data for Comprehensive Analysis",
-                           disabled=bool(errors) or _comp_pending)
-
-    # ── Submission ──────────────────────────────────────────────────────────────
-    if submit and not errors and not _comp_pending:
-        import tempfile as _tmpfile
-        from pathlib import Path as _Path
-
-        timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
-        safe      = lambda s: "".join(c if c.isalnum() or c in "-_" else "_" for c in s)
-        pkg_name  = f"PVPAT_{safe(user['company'])}_{safe(site.get('display_name','site'))}_{timestamp}"
-
-        with st.spinner("Packaging and uploading your data…"):
-            meta = {
-                "timestamp": timestamp, "portal": "pvpat-platform",
-                "client": user["company"], "contact_name": user["display_name"],
-                "contact_email": user["email"],
-                "site": site.get("display_name",""), "notes": notes,
-                "data_years": data_years,
-            }
-
-            buf     = _io.BytesIO()
-            uploads = []
-
-            with _zip.ZipFile(buf, "w", _zip.ZIP_DEFLATED) as zf:
-                # Normalised SCADA files (column-mapped)
-                if comp_mapped:
-                    for fname, norm_df in _normalise_files(comp_mapped, "solar"):
-                        folder = "irradiance" if fname.startswith("irradiance_") else "scada"
-                        fbytes = norm_df.to_csv(index=False, sep=";").encode("utf-8")
-                        rel    = f"{folder}/{fname}"
-                        zf.writestr(rel, fbytes)
-                        uploads.append((rel, fbytes))
-                else:
-                    # Fallback: raw files as-is
-                    for f in comp_uploaded:
-                        fbytes = f.getbuffer().tobytes()
-                        rel    = f"scada/{f.name}"
-                        zf.writestr(rel, fbytes)
-                        uploads.append((rel, fbytes))
-
-                for f in other_files:
-                    fbytes = f.getbuffer().tobytes()
-                    rel    = f"other/{f.name}"
-                    zf.writestr(rel, fbytes)
-                    uploads.append((rel, fbytes))
-
-                meta_bytes = _json.dumps(meta, indent=2, ensure_ascii=False).encode()
-                zf.writestr("submission_metadata.json", meta_bytes)
-                uploads.append(("submission_metadata.json", meta_bytes))
-
-            buf.seek(0)
-
-            sp_ok, sp_err = False, ""
-            if "sharepoint" in st.secrets:
-                try:
-                    sp_tok, sp_sid = _sharepoint_session()
-                    for rel, fbytes in uploads:
-                        _sp_put(sp_tok, sp_sid,
-                                f"Partage client/{pkg_name}/{rel}", fbytes)
-                    sp_ok = True
-                except Exception as exc:
-                    sp_err = str(exc)
-
-        total = len(uploads) - 1  # exclude metadata
-        if sp_ok:
-            st.success(f"""
-            ✅ **Submission received — thank you, {user['display_name']}.**
-
-            **{total} files** for **{site.get('display_name','')}** saved to SharePoint.
-            The 8p2 team will contact you at **{user['email']}** to confirm receipt
-            and schedule report delivery.
-            """)
-        elif sp_err:
-            st.error(f"SharePoint upload failed — {sp_err}")
-            st.warning("Please download the ZIP below and send it to your 8p2 contact.")
-        else:
-            st.success(f"✅ Packaged {total} files for **{site.get('display_name','')}**.")
-
-        st.download_button(
-            "⬇️  Download your submission package (ZIP)",
-            data=buf, file_name=f"{pkg_name}.zip", mime="application/zip",
+    if not comp_uploaded and tmp_data_dir is None:
+        st.warning(
+            "⚠️ No SCADA data files found for this site on this server. "
+            "Switch to **'Upload files'** and provide your CSV or Excel exports "
+            "to generate the report."
         )
+
+    _, col_btn, _ = st.columns([2, 2, 2])
+    with col_btn:
+        generate = st.button(
+            "📊 Generate Comprehensive Report",
+            disabled=_files_pending or (not comp_uploaded and tmp_data_dir is None),
+        )
+
+    if generate:
+        if comp_uploaded:
+            tmp = _tmpfile.mkdtemp(prefix="pvpat_comp_")
+            tmp_data_dir = _Path(tmp)
+            if comp_mapped:
+                for fname, norm_df in _normalise_files(comp_mapped, "solar"):
+                    norm_df.to_csv(tmp_data_dir / fname, index=False, sep=";")
+            else:
+                for f in comp_uploaded:
+                    (tmp_data_dir / f.name).write_bytes(f.getbuffer().tobytes())
+
+        with st.spinner("Analysing data and generating comprehensive report…"):
+            try:
+                import sys as _sys
+                _sys.path.insert(0, str(SCRIPT_DIR))
+                from report.build_scada_analysis_html import build_scada_analysis_html
+
+                pdf_path, html_path = build_scada_analysis_html(
+                    site_cfg = site,
+                    data_dir = tmp_data_dir,
+                )
+
+                if pdf_path and pdf_path.exists():
+                    st.success(f"✅ Comprehensive report generated: **{pdf_path.name}**")
+                    st.download_button(
+                        label     = "⬇️  Download PDF Report",
+                        data      = pdf_path.read_bytes(),
+                        file_name = pdf_path.name,
+                        mime      = "application/pdf",
+                    )
+                elif html_path and html_path.exists():
+                    st.warning(
+                        "PDF generation requires WeasyPrint system libraries. "
+                        "Downloading as HTML instead — open in any browser and use "
+                        "**File → Print → Save as PDF**."
+                    )
+                    st.download_button(
+                        label     = "⬇️  Download Report (HTML)",
+                        data      = html_path.read_bytes(),
+                        file_name = html_path.name,
+                        mime      = "text/html",
+                    )
+                else:
+                    st.error("Report generation produced no output. "
+                             "Check that your SCADA data covers the selected period.")
+
+            except Exception as exc:
+                st.error(f"Report generation failed: {exc}")
+                st.exception(exc)
+            finally:
+                if comp_uploaded and tmp_data_dir:
+                    _shutil.rmtree(str(tmp_data_dir), ignore_errors=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

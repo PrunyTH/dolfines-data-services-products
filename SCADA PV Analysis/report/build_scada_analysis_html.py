@@ -384,13 +384,13 @@ def _waterfall(inv: pd.DataFrame, irr: pd.DataFrame,
     irradiation = 0.0
     if not irr.empty and "GHI" in irr.columns:
         irradiation = irr["GHI"].clip(lower=0).sum() * interval_h / 1000   # kWh/m²
-    ref    = irradiation * cap_dc
-    target = ref * pr_target
-    actual = (inv["PAC"].sum() * interval_h) if not inv.empty else 0.0
-    pr_loss    = max(0.0, ref    - target)
-    opex_loss  = max(0.0, target - actual)
-    return dict(reference=ref, target=target, actual=actual,
-                pr_loss=pr_loss, opex_loss=opex_loss, irradiation=irradiation)
+    # Reference = expected energy at target PR (GHI × capacity × PR_target)
+    reference = irradiation * cap_dc * pr_target
+    actual    = (inv["PAC"].sum() * interval_h) if not inv.empty else 0.0
+    loss      = max(0.0, reference - actual)   # shortfall vs target
+    surplus   = max(0.0, actual - reference)   # above-target performance
+    return dict(reference=reference, actual=actual,
+                loss=loss, surplus=surplus, irradiation=irradiation)
 
 
 def _punchlist(inv: pd.DataFrame, irr: pd.DataFrame,
@@ -708,34 +708,43 @@ def chart_specific_yield(pivot: pd.DataFrame, freq: str = "D") -> str:
 
 
 def chart_waterfall(wf: dict) -> str:
-    ref    = wf.get("reference", 0)
-    target = wf.get("target",    0)
-    actual = wf.get("actual",    0)
-    if ref <= 0:
+    reference = wf.get("reference", 0)
+    actual    = wf.get("actual",    0)
+    loss      = wf.get("loss",      0)
+    surplus   = wf.get("surplus",   0)
+    if reference <= 0:
         return ""
 
-    pr_loss   = wf.get("pr_loss",   0)   # = ref - target  (always ≥ 0)
-    opex_loss = wf.get("opex_loss", 0)   # = max(0, target - actual)
-
-    # Choose display unit: kWh if ref < 5000 kWh, else MWh
-    if ref < 5000:
-        scale, unit = 1.0, "kWh"
-        fmt = lambda v: f"{v:,.0f}"
+    # Units
+    if reference < 5000:
+        fmt = lambda v: f"{v:,.0f} kWh"
+        ylab = "Energy (kWh)"
+        yfmt = lambda v, _: f"{v:,.0f}"
     else:
-        scale, unit = 1000.0, "MWh"
-        fmt = lambda v: f"{v/1000:,.1f}"
+        fmt = lambda v: f"{v/1000:,.1f} MWh"
+        ylab = "Energy (MWh)"
+        yfmt = lambda v, _: f"{v/1000:,.0f}"
 
-    # Bars: (height, bottom, color, label)
-    # Amber bar bottom MUST be target (= ref - pr_loss), not actual
+    # 3 bars: Expected | Loss or Surplus | Actual
+    if loss > 0:
+        mid_val   = loss
+        mid_bot   = actual
+        mid_col   = _T["red"]
+        mid_label = "Operational\nLoss"
+    else:
+        mid_val   = surplus
+        mid_bot   = reference
+        mid_col   = _T["green"]
+        mid_label = "Above\nTarget"
+
     bars = [
-        (ref,       0,      _T["navy"],  "Reference\nEnergy"),
-        (pr_loss,   target, _T["amber"], "Efficiency\n& Temp Loss"),
-        (opex_loss, actual, _T["red"],   "Operational\nLoss"),
-        (actual,    0,      _T["green"], "Actual\nEnergy"),
+        (reference, 0,       _T["navy"],  "Expected\nEnergy\n(PR\u00a080%)"),
+        (mid_val,   mid_bot, mid_col,     mid_label),
+        (actual,    0,       _T["green"], "Actual\nEnergy"),
     ]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for i, (val, bot, col, _lbl) in enumerate(bars):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for i, (val, bot, col, lbl) in enumerate(bars):
         if val <= 0:
             continue
         ax.bar(i, val, bottom=bot, color=col, alpha=0.88, width=0.55, zorder=2,
@@ -744,18 +753,17 @@ def chart_waterfall(wf: dict) -> str:
         ax.text(i, mid, fmt(val), ha="center", va="center",
                 fontsize=9, color="white", fontweight="bold")
 
-    # Connector lines (dashed, at the top of each segment)
-    connector_ys = [ref, target, actual]
-    for i, y in enumerate(connector_ys):
-        ax.plot([i + 0.275, i + 0.725], [y, y],
-                color=_T["border"], linewidth=0.8, linestyle="--", zorder=1)
+    # Connector lines
+    ax.plot([0.275, 0.725], [reference, reference],
+            color=_T["border"], linewidth=0.8, linestyle="--", zorder=1)
+    ax.plot([1.275, 1.725], [actual, actual],
+            color=_T["border"], linewidth=0.8, linestyle="--", zorder=1)
 
-    ax.set_xticks(range(4))
+    ax.set_xticks(range(3))
     ax.set_xticklabels([b[3] for b in bars], fontsize=9)
-    ax.set_ylabel(f"Energy ({unit})", fontsize=9, color=_T["text"])
-    ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda v, _: f"{v:,.0f}" if scale == 1.0 else f"{v/1000:,.0f}"))
-    ax.set_title("Energy Loss Waterfall",
+    ax.set_ylabel(ylab, fontsize=9, color=_T["text"])
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(yfmt))
+    ax.set_title("Energy Performance Waterfall",
                  color=_T["navy"], fontsize=10, fontweight="bold", pad=8)
     _apply_spine(ax)
     fig.patch.set_facecolor("white")
@@ -893,19 +901,25 @@ def _assemble_html(*, site_cfg: dict, report_date_str: str, period_str: str,
   </td></tr>"""
 
     # ── Waterfall summary rows ──────────────────────────────────────────────
-    ref    = wf.get("reference", 0)
-    actual = wf.get("actual",    0)
+    wf_reference = wf.get("reference", 0)
+    wf_actual    = wf.get("actual",    0)
+    wf_loss      = wf.get("loss",      0)
+    wf_surplus   = wf.get("surplus",   0)
+    if wf_loss > 0:
+        mid_row = f"""
+<tr class="row-danger"><td>Operational Loss</td>
+    <td>&#8722;{wf_loss/1000:,.1f} MWh</td>
+    <td>Shortfall vs expected energy at target PR (80%)</td></tr>"""
+    else:
+        mid_row = f"""
+<tr class="row-success"><td>Above Target</td>
+    <td>+{wf_surplus/1000:,.1f} MWh</td>
+    <td>Energy delivered above expected at target PR (80%)</td></tr>"""
     wf_rows = f"""
-<tr><td>Reference Energy</td><td>{ref/1000:,.1f} MWh</td>
-    <td>Theoretical maximum at full irradiance conversion</td></tr>
-<tr class="row-warning"><td>Efficiency &amp; Temp Losses</td>
-    <td>&#8722;{wf.get('pr_loss',0)/1000:,.1f} MWh</td>
-    <td>PR-driven losses: temperature, optical, cable, clipping</td></tr>
-<tr class="row-danger"><td>Operational Losses</td>
-    <td>&#8722;{wf.get('opex_loss',0)/1000:,.1f} MWh</td>
-    <td>Downtime, curtailment, communications faults</td></tr>
+<tr><td>Expected Energy (PR&nbsp;80%)</td><td>{wf_reference/1000:,.1f} MWh</td>
+    <td>Reference: irradiation &times; capacity &times; 80% PR target</td></tr>{mid_row}
 <tr class="row-success"><td><strong>Actual Energy</strong></td>
-    <td><strong>{actual/1000:,.1f} MWh</strong></td>
+    <td><strong>{wf_actual/1000:,.1f} MWh</strong></td>
     <td>Measured SCADA output</td></tr>"""
 
     return f"""<!DOCTYPE html>
@@ -1087,15 +1101,21 @@ def build_scada_analysis_html(
     site_cfg: dict,
     data_dir: Path,
     out_path: Optional[Path] = None,
-) -> Path:
+    skip_pdf: bool = False,
+) -> tuple:
     """
-    Generate the SCADA analysis HTML report and return the output path.
+    Generate the SCADA analysis HTML report and optionally convert to PDF.
 
     Parameters
     ----------
     site_cfg  : dict  — platform site configuration
     data_dir  : Path  — directory containing normalised inverter & irradiance CSVs
     out_path  : Path  — where to write the HTML (default: temp dir)
+    skip_pdf  : bool  — if True skip PDF conversion and return (None, html_path)
+
+    Returns
+    -------
+    (pdf_path | None, html_path)
     """
     import tempfile
     data_dir = Path(data_dir)
@@ -1172,4 +1192,37 @@ def build_scada_analysis_html(
     )
 
     out_path.write_text(html, encoding="utf-8")
-    return out_path
+
+    if skip_pdf:
+        return None, out_path
+
+    pdf_path = out_path.with_suffix(".pdf")
+
+    # ── Try WeasyPrint (Linux / system-lib install) ────────────────────────
+    try:
+        from weasyprint import HTML as _WP_HTML
+        _WP_HTML(string=html, base_url=str(out_path.parent)).write_pdf(str(pdf_path))
+        return pdf_path, out_path
+    except Exception:
+        pass
+
+    # ── Try Playwright (Chromium headless — installed via setup.sh) ────────
+    try:
+        from playwright.sync_api import sync_playwright as _spw
+        with _spw() as pw:
+            browser = pw.chromium.launch()
+            page    = browser.new_page()
+            page.goto(out_path.resolve().as_uri(), wait_until="networkidle")
+            page.pdf(
+                path           = str(pdf_path),
+                format         = "A4",
+                print_background = True,
+                margin         = {"top": "0", "bottom": "0",
+                                  "left": "0", "right": "0"},
+            )
+            browser.close()
+        return pdf_path, out_path
+    except Exception:
+        pass
+
+    return None, out_path
