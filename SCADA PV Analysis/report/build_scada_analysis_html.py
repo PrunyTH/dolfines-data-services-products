@@ -86,8 +86,76 @@ def _load_static_css() -> tuple[str, str]:
 # DATA LOADERS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _load_xlsx_wide(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load wide-format Excel files (e.g. test_data.xlsx).
+    Expects: date column, BJ*/inverter energy columns (kWh/interval), irr_sat column (W/m²).
+    Returns (inv_long, irr_df) both ready for the analysis pipeline.
+    """
+    inv_frames, irr_frames = [], []
+    for p in sorted(data_dir.glob("*.xlsx")):
+        try:
+            df = pd.read_excel(p)
+            df.columns = [c.strip() for c in df.columns]
+            # Find timestamp column
+            time_col = next((c for c in df.columns
+                             if c.lower() in ("date", "time", "time_udt", "datetime", "timestamp")), None)
+            if time_col is None:
+                continue
+            df[time_col] = pd.to_datetime(df[time_col], dayfirst=True, errors="coerce")
+            df = df.dropna(subset=[time_col])
+
+            # Detect interval from timestamps
+            ts_sorted = df[time_col].sort_values().unique()
+            interval_h = 0.0
+            if len(ts_sorted) > 1:
+                interval_h = (pd.Timestamp(ts_sorted[1]) - pd.Timestamp(ts_sorted[0])).total_seconds() / 3600.0
+            if interval_h <= 0:
+                interval_h = 5 / 60.0
+
+            # ── Inverter columns: any column matching BJ*, INV*, or similar numeric patterns ──
+            inv_cols = [c for c in df.columns
+                        if c != time_col and pd.api.types.is_numeric_dtype(df[c])
+                        and any(c.upper().startswith(pfx) for pfx in ("BJ", "INV", "WR", "G", "UNIT"))]
+            # Fallback: any numeric column that isn't a known non-inverter column
+            if not inv_cols:
+                skip = {"irr_sat", "irr", "eond", "month", "prond"}
+                inv_cols = [c for c in df.columns
+                            if c != time_col and pd.api.types.is_numeric_dtype(df[c])
+                            and c.lower() not in skip
+                            and not c.lower().startswith("pr")]
+
+            if inv_cols:
+                melted = df[[time_col] + inv_cols].melt(
+                    id_vars=time_col, var_name="EQUIP", value_name="_energy_kwh")
+                melted = melted.rename(columns={time_col: "Time_UDT"})
+                melted["_energy_kwh"] = pd.to_numeric(melted["_energy_kwh"], errors="coerce").fillna(0.0)
+                # Convert kWh/interval → kW (power) so downstream code works correctly
+                melted["PAC"] = melted["_energy_kwh"] / interval_h
+                inv_frames.append(melted[["Time_UDT", "EQUIP", "PAC"]])
+
+            # ── Irradiance: prefer irr_sat (W/m² instantaneous) ──
+            ghi_col = next((c for c in df.columns if c.lower() == "irr_sat"), None)
+            if ghi_col is None:
+                ghi_col = next((c for c in df.columns
+                                if "irr" in c.lower() or "ghi" in c.lower()), None)
+            if ghi_col:
+                irr_df = df[[time_col, ghi_col]].copy()
+                irr_df = irr_df.rename(columns={time_col: "Time_UDT", ghi_col: "GHI"})
+                irr_df["GHI"] = pd.to_numeric(irr_df["GHI"], errors="coerce").fillna(0.0)
+                irr_frames.append(irr_df)
+
+        except Exception:
+            continue
+
+    inv = pd.concat(inv_frames, ignore_index=True) if inv_frames else pd.DataFrame()
+    irr = pd.concat(irr_frames, ignore_index=True) if irr_frames else pd.DataFrame()
+    return inv, irr
+
+
 def _load_inv(data_dir: Path) -> pd.DataFrame:
     frames = []
+    # CSV files
     for p in sorted(data_dir.glob("*.csv")):
         nl = p.stem.lower()
         if any(k in nl for k in ("irr", "ghi", "irradiance", "meteo")):
@@ -104,6 +172,11 @@ def _load_inv(data_dir: Path) -> pd.DataFrame:
             frames.append(df)
         except Exception:
             continue
+    # Excel wide-format files
+    xlsx_inv, _ = _load_xlsx_wide(data_dir)
+    if not xlsx_inv.empty:
+        frames.append(xlsx_inv)
+
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
@@ -116,6 +189,7 @@ def _load_inv(data_dir: Path) -> pd.DataFrame:
 
 def _load_irr(data_dir: Path) -> pd.DataFrame:
     frames = []
+    # CSV files
     for p in sorted(data_dir.glob("*.csv")):
         try:
             df = pd.read_csv(p, sep=";", decimal=",", encoding="utf-8-sig", low_memory=False)
@@ -131,6 +205,11 @@ def _load_irr(data_dir: Path) -> pd.DataFrame:
             frames.append(df[["Time_UDT", "GHI"]])
         except Exception:
             continue
+    # Excel wide-format files
+    _, xlsx_irr = _load_xlsx_wide(data_dir)
+    if not xlsx_irr.empty:
+        frames.append(xlsx_irr)
+
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
