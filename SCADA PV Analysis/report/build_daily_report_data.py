@@ -1008,7 +1008,7 @@ def _playwright_pdf(html_path: Path, pdf_path: Path) -> None:
     A4_W, A4_H = 794, 1123
 
     script = f"""
-import asyncio, base64, json, sys
+import asyncio, base64
 from playwright.async_api import async_playwright
 
 async def main():
@@ -1020,21 +1020,9 @@ async def main():
         page = await browser.new_page(viewport={{"width": {A4_W}, "height": {A4_H}}})
         html = open(r"{html_path}", encoding="utf-8").read()
         await page.set_content(html, wait_until="networkidle")
-
-        n = await page.evaluate(
-            "document.querySelectorAll('.page, .cover-page').length"
-        )
-        if not n:
-            n = 1
-
-        shots = []
-        for i in range(n):
-            clip = {{"x": 0, "y": i * {A4_H}, "width": {A4_W}, "height": {A4_H}}}
-            png = await page.screenshot(clip=clip, full_page=False)
-            shots.append(base64.b64encode(png).decode())
-
+        png = await page.screenshot(full_page=True)
         await browser.close()
-        print(json.dumps(shots))
+        print(base64.b64encode(png).decode())
 
 asyncio.run(main())
 """
@@ -1045,12 +1033,22 @@ asyncio.run(main())
     if result.returncode != 0:
         raise RuntimeError(f"Playwright screenshot failed:\n{result.stderr}")
 
-    import json as _json, base64 as _b64
+    import base64 as _b64
     from io import BytesIO
     from PIL import Image
 
-    shots = _json.loads(result.stdout)
-    imgs = [Image.open(BytesIO(_b64.b64decode(s))).convert("RGB") for s in shots]
+    full_img = Image.open(BytesIO(_b64.b64decode(result.stdout.strip()))).convert("RGB")
+    total_h  = full_img.height
+
+    imgs = []
+    for y in range(0, total_h, A4_H):
+        chunk = full_img.crop((0, y, A4_W, min(y + A4_H, total_h)))
+        if chunk.height < A4_H:
+            padded = Image.new("RGB", (A4_W, A4_H), "white")
+            padded.paste(chunk, (0, 0))
+            chunk = padded
+        imgs.append(chunk)
+
     imgs[0].save(
         str(pdf_path), "PDF", resolution=96.0,
         save_all=True, append_images=imgs[1:],
