@@ -733,43 +733,38 @@ def _view_portfolio():
     if "custom_sites"   not in st.session_state:
         st.session_state["custom_sites"] = _load_custom_sites_from_disk()
 
+    # ── Handle icon clicks via query params ────────────────────────────────────
+    icon_action = st.query_params.get("pvpat_icon", None)
+    if icon_action:
+        del st.query_params["pvpat_icon"]
+        _parts = icon_action.split("_", 1)
+        _act, _sid = (_parts[0], _parts[1]) if len(_parts) == 2 else ("", "")
+        if _act == "sc" and _sid:
+            st.session_state["selected_site"] = _sid
+            st.session_state["view"] = "site_detail"
+            st.rerun()
+        elif _act == "ed" and _sid:
+            st.session_state["selected_site"] = _sid
+            st.session_state["view"] = "site_edit"
+            st.rerun()
+        elif _act == "go" and _sid:
+            st.session_state["selected_site"] = _sid
+            st.session_state["view"] = "report_select"
+            st.rerun()
+        elif _act == "del" and _sid:
+            st.session_state["pending_delete"] = _sid
+            st.rerun()
+
     # ── Portfolio-specific CSS ─────────────────────────────────────────────────
     st.markdown("""
     <style>
-      /* Push the icon group down to sit at the vertical centre of the site row.
-         Site row height ≈ 2.55rem (0.55rem*2 padding + ~1.45rem content).
-         Icon button height ≈ 1.8rem. Half-diff ≈ 0.38rem. */
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) > [data-testid="stColumn"]:last-child
-        > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] {
-        margin-top: 0.38rem !important;
-      }
-      /* Center each icon button within its sub-column */
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child .stButton {
-        display: flex !important;
-        justify-content: center !important;
-      }
-      /* Icon buttons — transparent, no border, white text */
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child .stButton > button {
-        padding: 0.2rem 0.4rem !important;
-        font-size: 1.0rem !important;
-        min-height: unset !important;
-        line-height: 1.2 !important;
-        background: transparent !important;
-        border: none !important;
-        color: rgba(255,255,255,0.75) !important;
-      }
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child .stButton > button:hover {
-        background: rgba(255,255,255,0.08) !important;
+      /* Site row icon hover effect */
+      .pvpat-icon:hover {
+        background: rgba(255,255,255,0.10) !important;
         color: white !important;
       }
-      /* Delete icon — red tint */
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child
-        [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:last-child .stButton > button {
-        color: rgba(229,57,53,0.85) !important;
-      }
-      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child
-        [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:last-child .stButton > button:hover {
-        background: rgba(229,57,53,0.15) !important;
+      .pvpat-icon-del:hover {
+        background: rgba(229,57,53,0.18) !important;
         color: #ff4444 !important;
       }
       /* Red confirm button — 2nd column in a confirmation row */
@@ -941,46 +936,42 @@ def _view_portfolio():
             kpi_html  = _site_kpi_chips(site_id, site)
             alert_dot = _low_pr_dot(site_id, site)
 
-            info_col, icon_col = st.columns([6, 1], vertical_alignment="center")
-            with info_col:
-                st.markdown(f"""
-                <div class="pvpat-site-row" style="display:flex;align-items:center;
-                  gap:0.65rem;flex-wrap:wrap;padding:0.55rem 0.85rem;
-                  background:rgba(255,255,255,0.04);
-                  border:1px solid rgba(255,255,255,0.11);border-radius:8px;">
-                  <span style="font-weight:700;color:white;font-size:0.92rem;
-                    white-space:nowrap;">{site_icon} {site['display_name']}</span>{alert_dot}
-                  <span style="color:rgba(255,255,255,0.40);font-size:0.78rem;
-                    white-space:nowrap;">{cap_mwp:.2f} {cap_label}</span>
-                  <span style="background:{status_col};color:white;font-size:0.58rem;
-                    padding:2px 7px;border-radius:7px;font-weight:700;
-                    white-space:nowrap;">{status_lbl}</span>
-                  <span style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-left:0.2rem;">
-                    {kpi_html}
-                  </span>
-                </div>
-                """, unsafe_allow_html=True)
-            with icon_col:
-                ic1, ic2, ic3, ic4 = st.columns(4)
-                with ic1:
-                    if st.button("ⓘ", key=f"sc_{site_id}", help="View site"):
-                        st.session_state["selected_site"] = site_id
-                        st.session_state["view"] = "site_detail"
-                        st.rerun()
-                with ic2:
-                    if st.button("✎", key=f"ed_{site_id}", help="Edit site"):
-                        st.session_state["selected_site"] = site_id
-                        st.session_state["view"] = "site_edit"
-                        st.rerun()
-                with ic3:
-                    if st.button("≡", key=f"go_{site_id}", help="Generate report"):
-                        st.session_state["selected_site"] = site_id
-                        st.session_state["view"] = "report_select"
-                        st.rerun()
-                with ic4:
-                    if st.button("✕", key=f"del_{site_id}", help="Delete site"):
-                        st.session_state["pending_delete"] = site_id
-                        st.rerun()
+            _ic_base = ("cursor:pointer;font-size:1.05rem;padding:5px 8px;"
+                        "border-radius:5px;user-select:none;transition:background 0.15s;")
+            _ic_url  = "window.location.search='?pvpat_icon="
+            st.markdown(f"""
+            <div class="pvpat-site-row" style="display:flex;align-items:center;
+              gap:0.65rem;flex-wrap:nowrap;padding:0.55rem 0.85rem;
+              background:rgba(255,255,255,0.04);
+              border:1px solid rgba(255,255,255,0.11);border-radius:8px;">
+              <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;flex:1;min-width:0;">
+                <span style="font-weight:700;color:white;font-size:0.92rem;
+                  white-space:nowrap;">{site_icon} {site['display_name']}</span>{alert_dot}
+                <span style="color:rgba(255,255,255,0.40);font-size:0.78rem;
+                  white-space:nowrap;">{cap_mwp:.2f} {cap_label}</span>
+                <span style="background:{status_col};color:white;font-size:0.58rem;
+                  padding:2px 7px;border-radius:7px;font-weight:700;
+                  white-space:nowrap;">{status_lbl}</span>
+                <span style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+                  {kpi_html}
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.05rem;flex-shrink:0;">
+                <span class="pvpat-icon" title="View site"
+                  onclick="{_ic_url}sc_{site_id}'"
+                  style="{_ic_base}color:rgba(255,255,255,0.72);">ⓘ</span>
+                <span class="pvpat-icon" title="Edit site"
+                  onclick="{_ic_url}ed_{site_id}'"
+                  style="{_ic_base}color:rgba(255,255,255,0.72);">✎</span>
+                <span class="pvpat-icon" title="Generate report"
+                  onclick="{_ic_url}go_{site_id}'"
+                  style="{_ic_base}color:rgba(255,255,255,0.72);">≡</span>
+                <span class="pvpat-icon pvpat-icon-del" title="Delete site"
+                  onclick="{_ic_url}del_{site_id}'"
+                  style="{_ic_base}color:rgba(229,57,53,0.85);">✕</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
