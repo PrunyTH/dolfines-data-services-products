@@ -859,7 +859,9 @@ def _view_portfolio():
     def _low_pr_dot(site_id: str, site: dict) -> str:
         demo = _SITE_DEMO.get(site_id, {})
         if demo.get("type", "solar") == "solar" and demo.get("pr", 100) < _PR_WARN:
-            return "<span style='color:#ff6b6b;font-size:0.7rem;margin-left:4px;' title='Low PR'>●</span>"
+            return ("<span style='display:inline-block;width:8px;height:8px;"
+                    "background:#ff6b6b;border-radius:50%;margin-left:6px;"
+                    "vertical-align:middle;flex-shrink:0;'></span>")
         return ""
 
     if not all_items:
@@ -907,7 +909,7 @@ def _view_portfolio():
             kpi_html  = _site_kpi_chips(site_id, site)
             alert_dot = _low_pr_dot(site_id, site)
 
-            info_col, icon_col = st.columns([6, 1], vertical_alignment="center")
+            info_col, icon_col = st.columns([6, 1], vertical_alignment="top")
             with info_col:
                 st.markdown(f"""
                 <div class="pvpat-site-row" style="display:flex;align-items:center;
