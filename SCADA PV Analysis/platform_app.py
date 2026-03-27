@@ -753,13 +753,28 @@ def _view_portfolio():
         background: rgba(229,57,53,0.18) !important;
         color: #ff4444 !important;
       }
-      /* Hide proxy Streamlit buttons — triggered via JS only */
-      [data-testid="stMarkdownContainer"]:has(.pvpat-site-row) + [data-testid="stHorizontalBlock"] {
-        height: 0 !important;
-        overflow: hidden !important;
-        margin: 0 !important;
-        padding: 0 !important;
+      /* Icon buttons — scoped via .pvpat-icons marker in the icon column */
+      [data-testid="stVerticalBlock"]:has(.pvpat-icons) button {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: rgba(255,255,255,0.72) !important;
+        padding: 5px 8px !important;
         min-height: 0 !important;
+        font-size: 1.05rem !important;
+        line-height: 1.3 !important;
+      }
+      [data-testid="stVerticalBlock"]:has(.pvpat-icons) button:hover {
+        background: rgba(255,255,255,0.10) !important;
+        color: white !important;
+      }
+      /* Delete icon — last column in the nested 4-column group */
+      [data-testid="stVerticalBlock"]:has(.pvpat-icons) [data-testid="column"]:last-child button {
+        color: rgba(229,57,53,0.85) !important;
+      }
+      [data-testid="stVerticalBlock"]:has(.pvpat-icons) [data-testid="column"]:last-child button:hover {
+        background: rgba(229,57,53,0.15) !important;
+        color: #ff4444 !important;
       }
       /* Red confirm button — 2nd column in a confirmation row */
       [data-testid="stHorizontalBlock"]:has(.pvpat-confirm-banner) [data-testid="stColumn"]:nth-child(2) .stButton > button {
@@ -851,7 +866,10 @@ def _view_portfolio():
 
     def _low_pr_dot(site_id: str, site: dict) -> str:
         demo = _SITE_DEMO.get(site_id, {})
-        if demo.get("type", "solar") == "solar" and demo.get("pr", 100) < _PR_WARN:
+        t = demo.get("type", "solar")
+        bad = (t == "solar" and demo.get("pr", 100) < _PR_WARN) or \
+              (t == "wind"  and demo.get("wind_avail", 100) < 85)
+        if bad:
             return ("<span class='pvpat-alert-dot' style='display:inline-block;width:8px;height:8px;"
                     "background:#ff6b6b;border-radius:50%;margin-left:6px;"
                     "vertical-align:middle;flex-shrink:0;'></span>")
@@ -902,76 +920,48 @@ def _view_portfolio():
             kpi_html  = _site_kpi_chips(site_id, site)
             alert_dot = _low_pr_dot(site_id, site)
 
-            # JS: walk siblings from the stMarkdownContainer to find the
-            # immediately-following stHorizontalBlock (hidden proxy buttons),
-            # then click button at index i.  No page reload — session preserved.
-            _js_find = (
-                "var m=this.closest('[data-testid=stMarkdownContainer]'),"
-                "p=m&&m.parentElement;"
-                "if(p){var cs=p.children,f=0;"
-                "for(var j=0;j<cs.length;j++){"
-                "if(f&&cs[j].dataset&&cs[j].dataset.testid=='stHorizontalBlock'){"
-                "var b=cs[j].querySelectorAll('button');"
-                "if(b[{i}])b[{i}].click();break;}"
-                "if(cs[j]===m)f=1;}}"
-            )
-            _oc = [_js_find.replace("{i}", str(i)) for i in range(4)]
-            _ic = ("cursor:pointer;font-size:1.05rem;padding:5px 8px;"
-                   "border-radius:5px;user-select:none;transition:background 0.15s;")
-            st.markdown(f"""
-            <div class="pvpat-site-row" style="display:flex;align-items:center;
-              gap:0.65rem;flex-wrap:nowrap;padding:0.55rem 0.85rem;
-              background:rgba(255,255,255,0.04);
-              border:1px solid rgba(255,255,255,0.11);border-radius:8px;">
-              <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;flex:1;min-width:0;">
-                <span style="font-weight:700;color:white;font-size:0.92rem;
-                  white-space:nowrap;">{site_icon} {site['display_name']}</span>{alert_dot}
-                <span style="color:rgba(255,255,255,0.40);font-size:0.78rem;
-                  white-space:nowrap;">{cap_mwp:.2f} {cap_label}</span>
-                <span style="background:{status_col};color:white;font-size:0.58rem;
-                  padding:2px 7px;border-radius:7px;font-weight:700;
-                  white-space:nowrap;">{status_lbl}</span>
-                <span style="display:flex;gap:0.3rem;flex-wrap:wrap;">
-                  {kpi_html}
-                </span>
-              </div>
-              <div style="display:flex;align-items:center;gap:0.05rem;flex-shrink:0;">
-                <span class="pvpat-icon" title="View site"
-                  onclick="{_oc[0]}"
-                  style="{_ic}color:rgba(255,255,255,0.72);">ⓘ</span>
-                <span class="pvpat-icon" title="Edit site"
-                  onclick="{_oc[1]}"
-                  style="{_ic}color:rgba(255,255,255,0.72);">✎</span>
-                <span class="pvpat-icon" title="Generate report"
-                  onclick="{_oc[2]}"
-                  style="{_ic}color:rgba(255,255,255,0.72);">≡</span>
-                <span class="pvpat-icon pvpat-icon-del" title="Delete site"
-                  onclick="{_oc[3]}"
-                  style="{_ic}color:rgba(229,57,53,0.85);">✕</span>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-            # Hidden proxy buttons — visually collapsed, clicked by JS above
-            ph1, ph2, ph3, ph4 = st.columns(4)
-            with ph1:
-                if st.button("view", key=f"h_sc_{site_id}"):
-                    st.session_state["selected_site"] = site_id
-                    st.session_state["view"] = "site_detail"
-                    st.rerun()
-            with ph2:
-                if st.button("edit", key=f"h_ed_{site_id}"):
-                    st.session_state["selected_site"] = site_id
-                    st.session_state["view"] = "site_edit"
-                    st.rerun()
-            with ph3:
-                if st.button("report", key=f"h_go_{site_id}"):
-                    st.session_state["selected_site"] = site_id
-                    st.session_state["view"] = "report_select"
-                    st.rerun()
-            with ph4:
-                if st.button("delete", key=f"h_del_{site_id}"):
-                    st.session_state["pending_delete"] = site_id
-                    st.rerun()
+            info_col, icon_col = st.columns([6, 1], vertical_alignment="center")
+            with info_col:
+                st.markdown(f"""
+                <div class="pvpat-site-row" style="display:flex;align-items:center;
+                  gap:0.65rem;flex-wrap:wrap;padding:0.35rem 0.85rem;
+                  background:rgba(255,255,255,0.04);
+                  border:1px solid rgba(255,255,255,0.11);border-radius:8px;">
+                  <span style="font-weight:700;color:white;font-size:0.92rem;
+                    white-space:nowrap;">{site_icon} {site['display_name']}</span>{alert_dot}
+                  <span style="color:rgba(255,255,255,0.40);font-size:0.78rem;
+                    white-space:nowrap;">{cap_mwp:.2f} {cap_label}</span>
+                  <span style="background:{status_col};color:white;font-size:0.58rem;
+                    padding:2px 7px;border-radius:7px;font-weight:700;
+                    white-space:nowrap;">{status_lbl}</span>
+                  <span style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+                    {kpi_html}
+                  </span>
+                </div>
+                """, unsafe_allow_html=True)
+            with icon_col:
+                # Marker span lets CSS scope button styles to this column only
+                st.markdown('<span class="pvpat-icons"></span>', unsafe_allow_html=True)
+                ic1, ic2, ic3, ic4 = st.columns(4)
+                with ic1:
+                    if st.button("ⓘ", key=f"sc_{site_id}", help="View site"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "site_detail"
+                        st.rerun()
+                with ic2:
+                    if st.button("✎", key=f"ed_{site_id}", help="Edit site"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "site_edit"
+                        st.rerun()
+                with ic3:
+                    if st.button("≡", key=f"go_{site_id}", help="Generate report"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "report_select"
+                        st.rerun()
+                with ic4:
+                    if st.button("✕", key=f"del_{site_id}", help="Delete site"):
+                        st.session_state["pending_delete"] = site_id
+                        st.rerun()
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
