@@ -1689,7 +1689,7 @@ def _view_solar_explorer():
         "A client-facing interactive reference page for utility-scale PV and battery storage architecture."
         "</p>",
         unsafe_allow_html=True)
-    render_solar_farm_explorer(site_name=site_name)
+    # render_solar_farm_explorer(site_name=site_name)  # TODO: visual redesign in progress
 
 
 # ─────────────────────────────────────────────────────────────────────────────

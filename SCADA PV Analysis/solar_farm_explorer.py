@@ -25,6 +25,31 @@ SOLAR_COMPONENTS = {
 }
 
 
+def _solar_panels(cols: int = 7, rows: int = 3, arrays: int = 3,
+                   pw: int = 54, ph: int = 15, cg: int = 6, rg: int = 8,
+                   ag: int = 22, ox: int = 20, oy: int = 24) -> str:
+    """Generate a clean rectangular panel grid for the SVG farm scene."""
+    parts: list[str] = []
+    for a in range(arrays):
+        ay = oy + a * (rows * (ph + rg) - rg + ag)
+        for r in range(rows):
+            ry = ay + r * (ph + rg)
+            for c in range(cols):
+                cx = ox + c * (pw + cg)
+                parts.append(
+                    f"<rect class='solar' x='{cx}' y='{ry}' "
+                    f"width='{pw}' height='{ph}' rx='2'/>"
+                )
+                # subtle horizontal cell divider for a realistic panel look
+                my = ry + ph // 2
+                parts.append(
+                    f"<line stroke='#8BBFD4' stroke-width='0.6' "
+                    f"x1='{cx + 3}' y1='{my}' x2='{cx + pw - 3}' y2='{my}' "
+                    f"opacity='.32'/>"
+                )
+    return "".join(parts)
+
+
 def render_solar_farm_explorer(site_name: str | None = None, height: int = 1750) -> None:
     title = site_name or "Utility-Scale Solar PV + BESS Explorer"
     data = json.dumps(SOLAR_COMPONENTS)
@@ -76,21 +101,39 @@ def render_solar_farm_explorer(site_name: str | None = None, height: int = 1750)
             <defs>
               <linearGradient id='panelGrad' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#5F82A8'/><stop offset='100%' stop-color='#243B55'/></linearGradient>
               <linearGradient id='fieldGrad' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#DDEEAF'/><stop offset='100%' stop-color='#CBE197'/></linearGradient>
+              <linearGradient id='farmBg' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#C8D89A'/><stop offset='100%' stop-color='#B8CC84'/></linearGradient>
             </defs>
             <circle cx='180' cy='92' r='52' fill='#F1C95B' opacity='.92'/>
             <g opacity='.6'><ellipse cx='1194' cy='84' rx='74' ry='22' fill='#FFFFFF'/><ellipse cx='1250' cy='82' rx='52' ry='18' fill='#FFFFFF'/></g>
             <path d='M0 342 C248 284 420 368 678 344 C924 322 1120 246 1480 304 L1480 980 L0 980 Z' fill='url(#fieldGrad)'/>
             <path class='road' d='M0 214 C182 214 402 182 642 152 C906 118 1186 112 1480 134'/><path class='road-mid' d='M0 214 C182 214 402 182 642 152 C906 118 1186 112 1480 134'/>
             <path class='road' d='M0 864 C230 758 462 714 728 744 C980 772 1244 640 1480 480'/><path class='road-mid' d='M0 864 C230 758 462 714 728 744 C980 772 1244 640 1480 480'/>
-            <path class='cable dc' d='M336 468 C422 494 510 522 594 564'/><path class='cable dc' d='M676 598 C754 604 820 604 888 600'/><path class='cable ac' d='M982 590 C1090 588 1176 574 1260 536'/><path class='cable ac' d='M1260 536 C1320 506 1380 438 1418 370'/><path class='cable ac' d='M1046 760 C1120 706 1182 640 1238 558'/><path class='cable dc' d='M800 828 C850 774 894 704 936 638'/><path class='cable aux' d='M178 226 C420 198 760 190 1092 222 C1222 234 1310 250 1382 288'/><path class='cable aux' d='M212 658 C400 702 598 766 800 830'/>
-            <circle id='orb-pv-1' class='energy' r='8' cx='336' cy='468'/><circle id='orb-pv-2' class='energy' r='8' cx='676' cy='598'/><circle id='orb-pv-3' class='energy' r='8' cx='982' cy='590'/><circle id='orb-pv-4' class='energy' r='8' cx='1260' cy='536'/><circle id='orb-bess-1' class='energy' r='8' cx='800' cy='828'/><circle id='orb-bess-2' class='energy' r='8' cx='936' cy='638'/><circle id='orb-bess-3' class='energy' r='8' cx='1046' cy='760'/>
+            <path class='cable dc' d='M556 418 C564 416 570 416 582 418'/><path class='cable dc' d='M718 420 C724 420 726 422 734 428'/><path class='cable dc' d='M852 436 C862 446 870 480 878 498'/><path class='cable ac' d='M982 590 C1090 588 1176 574 1260 536'/><path class='cable ac' d='M1260 536 C1320 506 1380 438 1418 370'/><path class='cable ac' d='M1046 760 C1120 706 1182 640 1238 558'/><path class='cable dc' d='M800 828 C850 774 894 704 936 638'/><path class='cable aux' d='M178 226 C420 198 760 190 1092 222 C1222 234 1310 250 1382 288'/><path class='cable aux' d='M212 658 C400 702 598 766 800 830'/>
+            <circle id='orb-pv-1' class='energy' r='8' cx='556' cy='418'/><circle id='orb-pv-2' class='energy' r='8' cx='852' cy='436'/><circle id='orb-pv-3' class='energy' r='8' cx='982' cy='590'/><circle id='orb-pv-4' class='energy' r='8' cx='1260' cy='536'/><circle id='orb-bess-1' class='energy' r='8' cx='800' cy='828'/><circle id='orb-bess-2' class='energy' r='8' cx='936' cy='638'/><circle id='orb-bess-3' class='energy' r='8' cx='1046' cy='760'/>
             <text x='82' y='56' class='label'>Visual Plant Scene</text><text x='82' y='76' class='sub'>PV field, storage branch, substation yard, and grid export shown as one connected site</text>
             <g id='component-weather-station' class='node' data-component-type='monitoring' transform='translate(130 118)'><circle class='hit' cx='42' cy='52' r='58'/><line class='outline' x1='40' y1='12' x2='40' y2='88'/><circle class='surface' cx='40' cy='14' r='15'/><path class='building' d='M42 34 L70 48 L70 58 L42 50 Z'/><line class='outline' x1='40' y1='60' x2='76' y2='82'/><text x='-6' y='118' class='label'>Weather Station</text></g>
             <g id='component-monitoring-scada' class='node' data-component-type='monitoring' transform='translate(1180 184)'><rect class='hit' x='-12' y='-10' width='210' height='120' rx='26'/><rect class='building' x='0' y='0' width='188' height='92' rx='18'/><rect class='surface' x='16' y='18' width='84' height='34' rx='8'/><rect class='surface' x='112' y='18' width='50' height='34' rx='8'/><line class='outline' x1='18' y1='64' x2='164' y2='64'/><text x='0' y='118' class='label'>SCADA &amp; Monitoring</text></g>
-            <g id='component-pv-modules' class='node' data-component-type='generation' transform='translate(154 360)'><rect class='hit' x='-24' y='-18' width='456' height='286' rx='28'/><g transform='translate(0 0)'><polygon class='solar' points='0,44 48,20 98,48 50,72'/><polygon class='solar' points='56,44 104,20 154,48 106,72'/><polygon class='solar' points='112,44 160,20 210,48 162,72'/></g><g transform='translate(34 74)'><polygon class='solar' points='0,44 48,20 98,48 50,72'/><polygon class='solar' points='56,44 104,20 154,48 106,72'/><polygon class='solar' points='112,44 160,20 210,48 162,72'/></g><g transform='translate(68 148)'><polygon class='solar' points='0,44 48,20 98,48 50,72'/><polygon class='solar' points='56,44 104,20 154,48 106,72'/><polygon class='solar' points='112,44 160,20 210,48 162,72'/></g><text x='0' y='252' class='label'>PV Modules</text><text x='0' y='270' class='sub'>Rows of bifacial panels on tracker tables</text></g>
-            <g id='component-tracker-system' class='node' data-component-type='generation' transform='translate(164 652)'><rect class='hit' x='-20' y='-10' width='330' height='112' rx='22'/><line class='outline' x1='20' y1='46' x2='20' y2='12'/><line class='outline' x1='94' y1='46' x2='94' y2='12'/><line class='outline' x1='168' y1='46' x2='168' y2='12'/><line class='outline' x1='242' y1='46' x2='242' y2='12'/><polygon class='solar' points='0,24 38,10 82,26 44,40'/><polygon class='solar' points='74,24 112,10 156,26 118,40'/><polygon class='solar' points='148,24 186,10 230,26 192,40'/><polygon class='solar' points='222,24 260,10 304,26 266,40'/><text x='0' y='96' class='label'>Tracker System</text></g>
-            <g id='component-dc-cables' class='node' data-component-type='transmission' transform='translate(382 482)'><rect class='hit' x='-18' y='-22' width='154' height='82' rx='22'/><path class='outline' d='M0 10 C36 -10 54 24 88 4 C108 -8 126 12 136 -6'/><path class='building' d='M0 28 C36 8 54 42 88 22 C108 10 126 30 136 12'/><text x='0' y='76' class='label'>DC Cabling</text></g>
-            <g id='component-string-combiner' class='node' data-component-type='protection' transform='translate(576 536)'><rect class='hit' x='-10' y='-10' width='128' height='118' rx='22'/><rect class='surface' x='0' y='0' width='106' height='88' rx='16'/><rect class='building' x='18' y='16' width='70' height='26' rx='6'/><line class='outline' x1='53' y1='42' x2='53' y2='68'/><line class='outline' x1='34' y1='68' x2='72' y2='68'/><text x='-6' y='112' class='label'>String Combiner</text></g>
+            <g id='component-pv-modules' class='node' data-component-type='generation' transform='translate(26 265)'>
+              <rect class='hit' x='-18' y='-14' width='566' height='300' rx='28'/>
+              <rect fill='url(#farmBg)' stroke='#7A9C42' stroke-width='1.8' x='0' y='0' width='530' height='250' rx='10' opacity='.6'/>
+              {_solar_panels(cols=8, rows=3, arrays=3, pw=54, ph=14, cg=6, rg=7, ag=20, ox=22, oy=22)}
+              <text x='0' y='266' class='label'>PV Modules</text>
+              <text x='0' y='282' class='sub'>Rows of bifacial panels on tracker tables</text>
+            </g>
+            <g id='component-tracker-system' class='node' data-component-type='generation' transform='translate(26 582)'>
+              <rect class='hit' x='-20' y='-10' width='338' height='106' rx='22'/>
+              <line class='outline' x1='22' y1='56' x2='22' y2='14'/>
+              <line class='outline' x1='100' y1='56' x2='100' y2='14'/>
+              <line class='outline' x1='178' y1='56' x2='178' y2='14'/>
+              <line class='outline' x1='256' y1='56' x2='256' y2='14'/>
+              <rect class='solar' x='2' y='6' width='40' height='16' rx='2' transform='rotate(-14 22 14)'/>
+              <rect class='solar' x='80' y='6' width='40' height='16' rx='2' transform='rotate(-14 100 14)'/>
+              <rect class='solar' x='158' y='6' width='40' height='16' rx='2' transform='rotate(-14 178 14)'/>
+              <rect class='solar' x='236' y='6' width='40' height='16' rx='2' transform='rotate(-14 256 14)'/>
+              <text x='0' y='92' class='label'>Tracker System</text>
+            </g>
+            <g id='component-dc-cables' class='node' data-component-type='transmission' transform='translate(582 392)'><rect class='hit' x='-18' y='-22' width='154' height='82' rx='22'/><path class='outline' d='M0 10 C36 -10 54 24 88 4 C108 -8 126 12 136 -6'/><path class='building' d='M0 28 C36 8 54 42 88 22 C108 10 126 30 136 12'/><text x='0' y='76' class='label'>DC Cabling</text></g>
+            <g id='component-string-combiner' class='node' data-component-type='protection' transform='translate(734 392)'><rect class='hit' x='-10' y='-10' width='128' height='118' rx='22'/><rect class='surface' x='0' y='0' width='106' height='88' rx='16'/><rect class='building' x='18' y='16' width='70' height='26' rx='6'/><line class='outline' x1='53' y1='42' x2='53' y2='68'/><line class='outline' x1='34' y1='68' x2='72' y2='68'/><text x='-6' y='112' class='label'>String Combiner</text></g>
             <g id='component-inverter' class='node' data-component-type='conversion' transform='translate(888 520)'><rect class='hit' x='-10' y='-10' width='118' height='132' rx='22'/><rect class='surface' x='0' y='0' width='100' height='106' rx='18'/><rect class='building' x='18' y='18' width='64' height='28' rx='7'/><path class='outline' d='M18 74 L34 60 L46 74 L60 58 L74 74'/><text x='0' y='128' class='label'>Inverter</text></g>
             <g id='component-ac-cables-lv' class='node' data-component-type='transmission' transform='translate(1006 554)'><rect class='hit' x='-10' y='-10' width='170' height='76' rx='22'/><path class='outline' d='M0 22 L32 8 L66 24 L98 10 L132 26'/><path class='building' d='M0 38 L32 24 L66 40 L98 26 L132 42'/><text x='0' y='80' class='label'>LV AC Feeders</text></g>
             <g id='component-mv-transformer' class='node' data-component-type='conversion' transform='translate(1200 500)'><rect class='hit' x='-14' y='-10' width='132' height='126' rx='24'/><rect class='surface' x='0' y='0' width='104' height='98' rx='18'/><circle class='building' cx='40' cy='46' r='16'/><circle class='building' cx='68' cy='46' r='16'/><text x='-2' y='122' class='label'>MV Transformer</text></g>
