@@ -758,6 +758,14 @@ def _view_portfolio():
     # ── Portfolio-specific CSS ─────────────────────────────────────────────────
     st.markdown("""
     <style>
+      /* Flashing alert dot for underperforming sites */
+      @keyframes pvpat-pulse {
+        0%, 100% { opacity: 1;   transform: scale(1); }
+        50%       { opacity: 0.2; transform: scale(0.75); }
+      }
+      .pvpat-alert-dot {
+        animation: pvpat-pulse 1.4s ease-in-out infinite;
+      }
       /* Site row icon hover effect */
       .pvpat-icon:hover {
         background: rgba(255,255,255,0.10) !important;
@@ -886,7 +894,7 @@ def _view_portfolio():
     def _low_pr_dot(site_id: str, site: dict) -> str:
         demo = _SITE_DEMO.get(site_id, {})
         if demo.get("type", "solar") == "solar" and demo.get("pr", 100) < _PR_WARN:
-            return ("<span style='display:inline-block;width:8px;height:8px;"
+            return ("<span class='pvpat-alert-dot' style='display:inline-block;width:8px;height:8px;"
                     "background:#ff6b6b;border-radius:50%;margin-left:6px;"
                     "vertical-align:middle;flex-shrink:0;'></span>")
         return ""
