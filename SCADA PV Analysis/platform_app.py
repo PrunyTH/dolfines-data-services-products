@@ -28,6 +28,7 @@ BG_WIND_PATH = SCRIPT_DIR / "bg_wind.jpg"
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from platform_users import USERS, SITES, PRICING
+from solar_farm_explorer import render_solar_farm_explorer
 
 
 # ── Page config ────────────────────────────────────────────────────────────
@@ -749,6 +750,19 @@ def _view_portfolio():
     st.markdown(
         "<div class='step-hdr'>Your Site Portfolio</div>",
         unsafe_allow_html=True)
+
+    col_intro, col_action = st.columns([3.4, 1.2], vertical_alignment="center")
+    with col_intro:
+        st.markdown(
+            "<p style='color:rgba(255,255,255,0.72);margin:0 0 1rem 0;'>"
+            "Explore a new interactive solar PV + BESS anatomy page to walk clients through the full power chain."
+            "</p>",
+            unsafe_allow_html=True,
+        )
+    with col_action:
+        if st.button("Open Solar Explorer", key="open_solar_explorer"):
+            st.session_state["view"] = "solar_explorer"
+            st.rerun()
 
     # Build the full list: built-in sites (minus deleted) + user-added sites
     builtin_ids = [s for s in user.get("sites", [])
@@ -1480,10 +1494,14 @@ def _view_site_detail():
     if is_wind:
         _apply_wind_bg()
 
-    col_back, _ = st.columns([2, 4])
+    col_back, col_explorer, _ = st.columns([1.6, 1.9, 3.5])
     with col_back:
         if st.button("← Back to Portfolio"):
             st.session_state["view"] = "portfolio"
+            st.rerun()
+    with col_explorer:
+        if (not is_wind) and st.button("Open Solar Explorer", key="site_open_solar_explorer"):
+            st.session_state["view"] = "solar_explorer"
             st.rerun()
 
     st.markdown(
@@ -1649,6 +1667,31 @@ def _view_site_detail():
             st.rerun()
 
 
+def _view_solar_explorer():
+    _sync_custom_sites()
+    _render_header()
+
+    site_id = st.session_state.get("selected_site", "")
+    site = SITES.get(site_id, {})
+    site_name = site.get("display_name") if site.get("site_type") != "wind" else None
+
+    col_back, _ = st.columns([1.6, 4])
+    with col_back:
+        if st.button("← Back", key="back_from_solar_explorer"):
+            st.session_state["view"] = "site_detail" if site_name else "portfolio"
+            st.rerun()
+
+    st.markdown(
+        "<div class='step-hdr'>Solar Farm Anatomy Explorer</div>",
+        unsafe_allow_html=True)
+    st.markdown(
+        "<p style='color:rgba(255,255,255,0.72);margin-bottom:1rem;'>"
+        "A client-facing interactive reference page for utility-scale PV and battery storage architecture."
+        "</p>",
+        unsafe_allow_html=True)
+    render_solar_farm_explorer(site_name=site_name)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTER
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1670,5 +1713,7 @@ else:
         _view_wind_daily_config()
     elif view == "comp_info":
         _view_comp_info()
+    elif view == "solar_explorer":
+        _view_solar_explorer()
     else:
         _view_portfolio()
