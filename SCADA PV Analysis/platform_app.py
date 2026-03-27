@@ -714,11 +714,26 @@ def _view_portfolio():
     # ── Portfolio-specific CSS ─────────────────────────────────────────────────
     st.markdown("""
     <style>
-      /* Red delete button — last column in any site-card row */
-      [data-testid="stHorizontalBlock"]:has(.site-card) [data-testid="stColumn"]:last-child .stButton > button {
-        background: #e53935 !important;
+      /* Icon buttons (all 3) — compact, neutral */
+      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child .stButton > button {
+        padding: 0.22rem 0.35rem !important;
+        font-size: 1.05rem !important;
+        min-height: unset !important;
+        line-height: 1.2 !important;
+        background: rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(255,255,255,0.18) !important;
       }
-      [data-testid="stHorizontalBlock"]:has(.site-card) [data-testid="stColumn"]:last-child .stButton > button:hover {
+      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child .stButton > button:hover {
+        background: rgba(255,255,255,0.15) !important;
+      }
+      /* Delete icon only — last of the 3 nested icon columns */
+      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child
+        [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:last-child .stButton > button {
+        background: rgba(229,57,53,0.75) !important;
+        border-color: rgba(229,57,53,0.5) !important;
+      }
+      [data-testid="stHorizontalBlock"]:has(.pvpat-site-row) [data-testid="stColumn"]:last-child
+        [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:last-child .stButton > button:hover {
         background: #b71c1c !important;
       }
       /* Red confirm button — 2nd column in a confirmation row */
@@ -808,59 +823,59 @@ def _view_portfolio():
                     st.session_state["pending_delete"] = None
                     st.rerun()
 
-        # Normal sites — 2-column card grid
+        # Normal sites — single-column list, one site per row
         normal_items = [(sid, s, c) for sid, s, c in all_items
                         if st.session_state["pending_delete"] != sid]
-        for row_start in range(0, len(normal_items), 2):
-            pair = normal_items[row_start:row_start + 2]
-            grid_cols = st.columns(2, gap="medium")
-            for col_idx, (site_id, site, is_custom) in enumerate(pair):
-                cap_mwp    = site.get("cap_dc_kwp", 0) / 1000
-                status     = site.get("status", "operational")
-                status_lbl = {"operational": "OPERATIONAL", "maintenance": "MAINTENANCE",
-                              "offline": "OFFLINE"}.get(status, status.upper())
-                status_col = {"operational": "#2E8B57", "maintenance": "#E67E22",
-                              "offline": "#C0392B"}.get(status, "#888")
-                site_icon  = "🌬️" if site.get("site_type") == "wind" else "☀️"
-                cap_label  = "MW" if site.get("site_type") == "wind" else "MWp"
+        for site_id, site, is_custom in normal_items:
+            cap_mwp    = site.get("cap_dc_kwp", 0) / 1000
+            status     = site.get("status", "operational")
+            status_lbl = {"operational": "OPERATIONAL", "maintenance": "MAINTENANCE",
+                          "offline": "OFFLINE"}.get(status, status.upper())
+            status_col = {"operational": "#2E8B57", "maintenance": "#E67E22",
+                          "offline": "#C0392B"}.get(status, "#888")
+            site_icon  = "🌬️" if site.get("site_type") == "wind" else "☀️"
+            cap_label  = "MW" if site.get("site_type") == "wind" else "MWp"
 
-                kpi_html = " ".join(_kpi_chip(v) for v in _DEMO_KPIS.values())
+            kpi_html = " ".join(_kpi_chip(v) for v in _DEMO_KPIS.values())
 
-                with grid_cols[col_idx]:
-                    info_col, action_col = st.columns([3.2, 1.1], vertical_alignment="center")
-                    with info_col:
-                        st.markdown(f"""
-                        <div class="site-card" style="border:1.5px solid rgba(255,255,255,0.15);
-                          border-radius:10px;padding:0.75rem 1.0rem;
-                          background:rgba(255,255,255,0.05);">
-                          <div style="display:flex;align-items:center;gap:0.5rem;
-                            flex-wrap:wrap;margin-bottom:0.45rem;">
-                            <span class="site-card-name" style="font-size:0.95rem;">
-                              {site_icon} {site['display_name']}
-                            </span>
-                            <span style="color:rgba(255,255,255,0.42);font-size:0.80rem;
-                              font-weight:500;">{cap_mwp:.2f} {cap_label}</span>
-                            <span style="margin-left:auto;background:{status_col};color:white;
-                              font-size:0.58rem;padding:2px 8px;border-radius:8px;
-                              font-weight:700;white-space:nowrap;">{status_lbl}</span>
-                          </div>
-                          <div style="display:flex;flex-wrap:wrap;gap:0.35rem;">
-                            {kpi_html}
-                          </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with action_col:
-                        if st.button("View Site →", key=f"sc_{site_id}", use_container_width=True):
-                            st.session_state["selected_site"] = site_id
-                            st.session_state["view"] = "site_detail"
-                            st.rerun()
-                        if st.button("Generate Report", key=f"go_{site_id}", use_container_width=True):
-                            st.session_state["selected_site"] = site_id
-                            st.session_state["view"] = "report_select"
-                            st.rerun()
-                        if st.button("🗑 Delete", key=f"del_{site_id}", use_container_width=True):
-                            st.session_state["pending_delete"] = site_id
-                            st.rerun()
+            info_col, icon_col = st.columns([6, 1], vertical_alignment="center")
+            with info_col:
+                st.markdown(f"""
+                <div class="pvpat-site-row" style="display:flex;align-items:center;
+                  gap:0.65rem;flex-wrap:wrap;padding:0.55rem 0.85rem;
+                  background:rgba(255,255,255,0.04);
+                  border:1px solid rgba(255,255,255,0.11);border-radius:8px;">
+                  <span style="font-weight:700;color:white;font-size:0.92rem;
+                    white-space:nowrap;">{site_icon} {site['display_name']}</span>
+                  <span style="color:rgba(255,255,255,0.40);font-size:0.78rem;
+                    white-space:nowrap;">{cap_mwp:.2f} {cap_label}</span>
+                  <span style="background:{status_col};color:white;font-size:0.58rem;
+                    padding:2px 7px;border-radius:7px;font-weight:700;
+                    white-space:nowrap;">{status_lbl}</span>
+                  <span style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-left:auto;">
+                    {kpi_html}
+                  </span>
+                </div>
+                """, unsafe_allow_html=True)
+            with icon_col:
+                ic1, ic2, ic3 = st.columns(3)
+                with ic1:
+                    if st.button("📋", key=f"go_{site_id}", use_container_width=True,
+                                 help="Generate report"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "report_select"
+                        st.rerun()
+                with ic2:
+                    if st.button("ℹ️", key=f"sc_{site_id}", use_container_width=True,
+                                 help="View site"):
+                        st.session_state["selected_site"] = site_id
+                        st.session_state["view"] = "site_detail"
+                        st.rerun()
+                with ic3:
+                    if st.button("🗑", key=f"del_{site_id}", use_container_width=True,
+                                 help="Delete site"):
+                        st.session_state["pending_delete"] = site_id
+                        st.rerun()
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
@@ -1029,19 +1044,19 @@ def _view_report_select():
     monthly_icon   = "🌬️" if is_wind else "☀️"
     monthly_title  = "Monthly Wind Report" if is_wind else "Monthly Report"
     monthly_bullets = (
-        ["8–12 pages, automated monthly rollup",
-         "Monthly energy &amp; availability summary",
+        ["8–12 pages, monthly rollup",
+         "Energy &amp; availability summary",
          "Turbine performance ranking",
-         "Wind resource &amp; power curve analysis",
+         "Wind resource &amp; power curve",
          "Month-on-month trend comparison",
-         "Alerts &amp; maintenance log review"]
+         "Alerts &amp; maintenance review"]
         if is_wind else
-        ["8–12 pages, automated monthly rollup",
-         "Monthly energy, PR &amp; irradiance summary",
-         "Inverter performance ranking &amp; heatmap",
+        ["8–12 pages, monthly rollup",
+         "Energy, PR &amp; irradiance summary",
+         "Inverter performance ranking",
          "Month-on-month trend comparison",
          "Data quality review",
-         "Alerts &amp; maintenance log review"]
+         "Alerts &amp; maintenance review"]
     )
 
     with col_b:
