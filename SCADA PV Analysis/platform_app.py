@@ -985,37 +985,35 @@ def _t(key: str, **kwargs) -> str:
 
 def _render_lang_toggle() -> None:
     active = _ui_lang()
-    gb_border = "#f39200" if active == "en" else "rgba(255,255,255,0.22)"
-    fr_border = "#f39200" if active == "fr" else "rgba(255,255,255,0.22)"
+    gb_border = "#f39200" if active == "en" else "rgba(255,255,255,0.0)"
+    fr_border = "#f39200" if active == "fr" else "rgba(255,255,255,0.0)"
     st.markdown(
         f"""
         <style>
           .lang-flag {{
-            width: 42px;
-            height: 30px;
+            width: 34px;
+            height: 24px;
             border-radius: 8px;
             background-position: center;
             background-repeat: no-repeat;
             background-size: 28px 20px;
-            margin-bottom: -30px;
+            margin-bottom: -24px;
             position: relative;
             z-index: 2;
             pointer-events: none;
           }}
           .lang-flag-en {{
             border: 1px solid {gb_border};
-            background-color: rgba(255,255,255,0.06);
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><clipPath id='a'><rect width='28' height='20' rx='2'/></clipPath><g clip-path='url(%23a)'><rect width='28' height='20' fill='%23012169'/><path d='M0 0l28 20M28 0L0 20' stroke='%23fff' stroke-width='4'/><path d='M0 0l28 20M28 0L0 20' stroke='%23C8102E' stroke-width='2.2'/><path d='M14 0v20M0 10h28' stroke='%23fff' stroke-width='6'/><path d='M14 0v20M0 10h28' stroke='%23C8102E' stroke-width='4'/></g></svg>");
           }}
           .lang-flag-fr {{
             border: 1px solid {fr_border};
-            background-color: rgba(255,255,255,0.06);
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><rect width='28' height='20' rx='2' fill='%23fff'/><path d='M0 0h9.33v20H0z' fill='%230055A4'/><path d='M18.67 0H28v20h-9.33z' fill='%23EF4135'/></svg>");
           }}
           .lang-toggle-row div[data-testid="stButton"] > button {{
-            min-width: 42px !important;
-            width: 42px !important;
-            height: 30px !important;
+            min-width: 34px !important;
+            width: 34px !important;
+            height: 24px !important;
             padding: 0 !important;
             font-size: 0 !important;
             line-height: 0 !important;
@@ -1023,6 +1021,7 @@ def _render_lang_toggle() -> None:
             background: transparent !important;
             border: 1px solid transparent !important;
             color: transparent !important;
+            box-shadow: none !important;
           }}
         </style>
         """,
@@ -1055,15 +1054,36 @@ def _render_header(show_logout=True):
         f"<span class='plan-unlimited'>{_t('header.plan.unlimited')}</span>" if plan == "unlimited"
         else f"<span class='plan-one-shot'>{_t('header.plan.one_shot')}</span>"
     ) if plan else ""
+    st.markdown("""
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap');
+      .platform-title {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        font-size: clamp(0.98rem, 2vw, 1.45rem);
+        line-height: 1.1;
+      }
+      .platform-title-login {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        font-size: clamp(0.95rem, 2.4vw, 1.28rem);
+        line-height: 1.15;
+      }
+    </style>
+    """, unsafe_allow_html=True)
 
     if show_logout and _logged_in():
-        col_hdr, col_lang, col_btn = st.columns([5, 1.2, 1])
+        col_hdr, col_lang, col_btn = st.columns([6.6, 0.9, 1.4])
         with col_hdr:
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:1.4rem;margin-bottom:0.6rem;">
               {logo_img}
               <div>
-                <div style="font-size:1.45rem;font-weight:700;color:white;line-height:1.2;white-space:nowrap;">
+                <div class="platform-title" style="color:white;">
                   {_t("header.title")}
                 </div>
                 {('<div style="font-size:0.84rem;color:rgba(255,255,255,0.55);margin-top:0.15rem;white-space:nowrap;">' + plan_html + '</div>') if plan_html else ''}
@@ -1076,12 +1096,12 @@ def _render_header(show_logout=True):
             if st.button(_t("header.logout")):
                 _logout()
     else:
-        col_hdr, col_lang = st.columns([5, 1.2])
+        col_hdr, col_lang = st.columns([6.8, 0.9])
         with col_hdr:
             st.markdown(f"""
             <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
               {logo_img}
-              <div style="font-size:1.35rem;font-weight:700;color:white;line-height:1.2;text-align:center;">
+              <div class="platform-title-login" style="color:white;text-align:center;">
                 {_t("header.title")}
               </div>
             </div>
