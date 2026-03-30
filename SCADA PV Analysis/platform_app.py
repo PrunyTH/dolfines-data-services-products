@@ -222,7 +222,7 @@ bg_css = (f"url('data:image/jpeg;base64,{bg_b64}')"
           "linear-gradient(135deg,#001a3a 0%,#003366 60%,#0a4d8c 100%)")
 
 logo_img = (f'<img src="data:image/png;base64,{logo_b64}" class="pvpat-header-logo" '
-            f'style="height:62px;width:auto;flex-shrink:0;" />'
+            f'style="height:42px;width:auto;flex-shrink:0;" />'
             if logo_b64 else "")
 
 
@@ -319,7 +319,7 @@ st.markdown(f"""
   .stButton > button {{
     background:#F07820 !important; color:white !important; border:none !important;
     border-radius:6px !important; font-weight:700 !important; font-size:1rem !important;
-    padding:0.65rem 2rem !important; width:100%; transition:background 0.2s;
+    padding:0.65rem 2rem !important; transition:background 0.2s;
     white-space:nowrap !important;
   }}
   .stButton > button:hover {{ background:#cc6415 !important; }}
@@ -986,74 +986,41 @@ def _t(key: str, **kwargs) -> str:
     return text.format(**kwargs)
 
 
-def _render_lang_toggle() -> None:
+def _render_lang_toggle():
     active = _ui_lang()
-    active_css = (
-        '[data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(1) button'
-        if active == "en"
-        else '[data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(2) button'
-    )
-    st.markdown(
-        f"""
-        <style>
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) {{
-            align-items: center !important;
-            justify-content: flex-end !important;
-            gap: 0 !important;
-            margin: 0 !important;
-          }}
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) button {{
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            min-width: 0 !important;
-            width: auto !important;
-            min-height: 1rem !important;
-            height: 1rem !important;
-            line-height: 1 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            color: rgba(255,255,255,0.82) !important;
-            font-size: 0.95rem !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.02em !important;
-            white-space: nowrap !important;
-          }}
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"] {{
-            display: flex !important;
-            justify-content: flex-end !important;
-            align-items: center !important;
-            flex: 0 0 auto !important;
-          }}
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) button:hover {{
-            color: white !important;
-          }}
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(1) button {{
-            border-right: 1px solid rgba(255,255,255,0.42) !important;
-            border-radius: 0 !important;
-            padding-right: 0.5rem !important;
-            margin-right: 0.45rem !important;
-          }}
-          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(2) button {{
-            padding-left: 0 !important;
-          }}
-          {active_css} {{
-            color: #f39200 !important;
-            font-weight: 700 !important;
-          }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    c1, c2 = st.columns([0.5, 0.5], vertical_alignment="center")
+
+    st.markdown("""
+    <style>
+    .lang-btn-wrap {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.25rem;
+        white-space: nowrap;
+    }
+
+    div[data-testid="stButton"] > button[kind="secondary"] {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 0.2rem 0.45rem !important;
+        width: auto !important;
+        min-width: 42px !important;
+        border-radius: 8px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    c1, c2 = st.columns([1, 1], gap="small")
     with c1:
-        st.markdown('<span class="lang-switch-scope"></span>', unsafe_allow_html=True)
-        if st.button("EN", key="lang_en_text_simple"):
+        if st.button("🇬🇧", key="lang_en_flag", type="secondary", use_container_width=False):
             if active != "en":
                 st.session_state["ui_lang"] = "en"
                 st.rerun()
     with c2:
-        if st.button("FR", key="lang_fr_text_simple"):
+        if st.button("🇫🇷", key="lang_fr_flag", type="secondary", use_container_width=False):
             if active != "fr":
                 st.session_state["ui_lang"] = "fr"
                 st.rerun()
@@ -1068,62 +1035,98 @@ def _render_header(show_logout=True):
     plan = user.get("plan", "")
     plan_html = (
         f"<span class='plan-unlimited'>{_t('header.plan.unlimited')}</span>" if plan == "unlimited"
-        else f"<span class='plan-one-shot'>{_t('header.plan.one_shot')}</span>"
+        else f"<span class='plan-one_shot'>{_t('header.plan.one_shot')}</span>"
     ) if plan else ""
+
     st.markdown("""
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap');
+      .header-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        min-height: 42px;
+      }
+
+      .header-title-block {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+      }
+
       .platform-title {
         font-family: 'Montserrat', sans-serif;
         font-weight: 700;
         letter-spacing: -0.02em;
         white-space: nowrap;
-        font-size: clamp(0.98rem, 2vw, 1.45rem);
+        font-size: clamp(0.95rem, 1.7vw, 1.35rem);
         line-height: 1.1;
+        color: white;
+        margin: 0;
       }
-      .platform-title-login {
-        font-family: 'Montserrat', sans-serif;
-        font-weight: 700;
-        letter-spacing: -0.02em;
+
+      .platform-sub {
+        margin-top: 0.15rem;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.55);
         white-space: nowrap;
-        font-size: clamp(0.95rem, 2.4vw, 1.28rem);
-        line-height: 1.15;
+      }
+
+      .login-header-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        margin-bottom: 0.2rem;
+      }
+
+      /* compact logout button in header only */
+      .header-logout-wrap div[data-testid="stButton"] > button {
+        width: auto !important;
+        min-height: 34px !important;
+        padding: 0.35rem 1rem !important;
+        font-size: 0.9rem !important;
       }
     </style>
     """, unsafe_allow_html=True)
 
     if show_logout and _logged_in():
-        col_top_spacer, col_top_lang, col_top_btn = st.columns([7.2, 0.85, 1.15], vertical_alignment="top")
-        with col_top_lang:
+        col_left, col_lang, col_logout = st.columns([7.6, 0.9, 1.2], vertical_alignment="center")
+
+        with col_left:
+            st.markdown(f"""
+            <div class="header-wrap">
+              {logo_img}
+              <div class="header-title-block">
+                <div class="platform-title">{_t("header.title")}</div>
+                {f'<div class="platform-sub">{plan_html}</div>' if plan_html else ''}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_lang:
             _render_lang_toggle()
-        with col_top_btn:
-            if st.button(_t("header.logout")):
+
+        with col_logout:
+            st.markdown('<div class="header-logout-wrap">', unsafe_allow_html=True)
+            if st.button(_t("header.logout"), key="logout_btn"):
                 _logout()
-        with st.container():
-            st.markdown(f"""
-            <div style="display:flex;align-items:center;gap:1.4rem;margin-bottom:0.6rem;">
-              {logo_img}
-              <div>
-                <div class="platform-title" style="color:white;">
-                  {_t("header.title")}
-                </div>
-                {('<div style="font-size:0.84rem;color:rgba(255,255,255,0.55);margin-top:0.15rem;white-space:nowrap;">' + plan_html + '</div>') if plan_html else ''}
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
     else:
-        col_top_spacer, col_top_lang = st.columns([8.3, 0.85], vertical_alignment="top")
-        with col_top_lang:
-            _render_lang_toggle()
-        with st.container():
+        col_left, col_lang = st.columns([7.8, 1.0], vertical_alignment="center")
+
+        with col_left:
             st.markdown(f"""
-            <div style="display:flex;flex-direction:column;align-items:center;gap:6mm;margin-bottom:0.45rem;">
+            <div class="login-header-center">
               {logo_img}
-              <div class="platform-title-login" style="color:white;text-align:center;">
-                {_t("header.title")}
-              </div>
+              <div class="platform-title">{_t("header.title")}</div>
             </div>
             """, unsafe_allow_html=True)
+
+        with col_lang:
+            _render_lang_toggle()
+
     st.divider()
 
 
