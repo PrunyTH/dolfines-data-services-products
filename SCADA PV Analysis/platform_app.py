@@ -991,18 +991,26 @@ def _render_lang_toggle() -> None:
     active_css = (
         '[data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(1) button'
         if active == "en"
-        else '[data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(3) button'
+        else '[data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(2) button'
     )
     st.markdown(
         f"""
         <style>
+          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) {{
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 0 !important;
+            margin: 0 !important;
+          }}
           [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) button {{
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
             min-width: 0 !important;
             width: auto !important;
-            height: auto !important;
+            min-height: 1rem !important;
+            height: 1rem !important;
+            line-height: 1 !important;
             padding: 0 !important;
             margin: 0 !important;
             color: rgba(255,255,255,0.82) !important;
@@ -1013,11 +1021,21 @@ def _render_lang_toggle() -> None:
           }}
           [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"] {{
             display: flex !important;
-            justify-content: center !important;
+            justify-content: flex-end !important;
             align-items: center !important;
+            flex: 0 0 auto !important;
           }}
           [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) button:hover {{
             color: white !important;
+          }}
+          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(1) button {{
+            border-right: 1px solid rgba(255,255,255,0.42) !important;
+            border-radius: 0 !important;
+            padding-right: 0.5rem !important;
+            margin-right: 0.45rem !important;
+          }}
+          [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) [data-testid="stColumn"]:nth-child(2) button {{
+            padding-left: 0 !important;
           }}
           {active_css} {{
             color: #f39200 !important;
@@ -1027,7 +1045,7 @@ def _render_lang_toggle() -> None:
         """,
         unsafe_allow_html=True,
     )
-    c1, c2, c3 = st.columns([0.48, 0.12, 0.48], vertical_alignment="center")
+    c1, c2 = st.columns([0.5, 0.5], vertical_alignment="center")
     with c1:
         st.markdown('<span class="lang-switch-scope"></span>', unsafe_allow_html=True)
         if st.button("EN", key="lang_en_text_simple"):
@@ -1035,11 +1053,6 @@ def _render_lang_toggle() -> None:
                 st.session_state["ui_lang"] = "en"
                 st.rerun()
     with c2:
-        st.markdown(
-            "<div style='text-align:center;color:rgba(255,255,255,0.45);font-size:0.95rem;'>/</div>",
-            unsafe_allow_html=True,
-        )
-    with c3:
         if st.button("FR", key="lang_fr_text_simple"):
             if active != "fr":
                 st.session_state["ui_lang"] = "fr"
@@ -1080,13 +1093,12 @@ def _render_header(show_logout=True):
     """, unsafe_allow_html=True)
 
     if show_logout and _logged_in():
-        col_top_spacer, col_top_lang, col_top_btn = st.columns([6.7, 1.0, 1.35], vertical_alignment="top")
+        col_top_spacer, col_top_lang, col_top_btn = st.columns([7.2, 0.85, 1.15], vertical_alignment="top")
         with col_top_lang:
             _render_lang_toggle()
         with col_top_btn:
             if st.button(_t("header.logout")):
                 _logout()
-        st.markdown("<div style='height:0.15rem;'></div>", unsafe_allow_html=True)
         with st.container():
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:1.4rem;margin-bottom:0.6rem;">
@@ -1100,13 +1112,12 @@ def _render_header(show_logout=True):
             </div>
             """, unsafe_allow_html=True)
     else:
-        col_top_spacer, col_top_lang = st.columns([7.8, 1.0], vertical_alignment="top")
+        col_top_spacer, col_top_lang = st.columns([8.3, 0.85], vertical_alignment="top")
         with col_top_lang:
             _render_lang_toggle()
-        st.markdown("<div style='height:0.1rem;'></div>", unsafe_allow_html=True)
         with st.container():
             st.markdown(f"""
-            <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6mm;margin-bottom:0.45rem;">
               {logo_img}
               <div class="platform-title-login" style="color:white;text-align:center;">
                 {_t("header.title")}
