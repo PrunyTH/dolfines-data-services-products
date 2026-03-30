@@ -2160,11 +2160,50 @@ def _view_site_edit():
     _sync_custom_sites()
     _render_header()
 
-    from equipment_kb import (
-        WIND_TURBINES, SOLAR_INVERTERS, SOLAR_MODULES, SOLAR_MODULE_MANUFACTURERS,
-        detect_wind_manufacturer, detect_inverter_manufacturer, detect_module_manufacturer,
-        get_wind_turbine_spec, get_inverter_spec, get_solar_module_spec,
+    import equipment_kb as _kb
+
+    WIND_TURBINES = getattr(_kb, "WIND_TURBINES", {})
+    SOLAR_INVERTERS = getattr(_kb, "SOLAR_INVERTERS", {})
+    SOLAR_MODULES = getattr(_kb, "SOLAR_MODULES", {})
+    SOLAR_MODULE_MANUFACTURERS = getattr(
+        _kb, "SOLAR_MODULE_MANUFACTURERS", list(SOLAR_MODULES.keys())
     )
+    detect_wind_manufacturer = getattr(_kb, "detect_wind_manufacturer", lambda _value: "")
+    detect_inverter_manufacturer = getattr(_kb, "detect_inverter_manufacturer", lambda _value: "")
+
+    def detect_module_manufacturer(module_model: str) -> str:
+        custom_detector = getattr(_kb, "detect_module_manufacturer", None)
+        if callable(custom_detector):
+            return custom_detector(module_model)
+        if not module_model:
+            return ""
+        text = str(module_model).lower()
+        for manufacturer in SOLAR_MODULE_MANUFACTURERS:
+            short_name = str(manufacturer).lower().split("/")[0].strip()
+            if short_name and short_name in text:
+                return manufacturer
+        return ""
+
+    def get_wind_turbine_spec(manufacturer: str, model: str) -> dict:
+        getter = getattr(_kb, "get_wind_turbine_spec", None)
+        if callable(getter):
+            return getter(manufacturer, model)
+        return {}
+
+    def get_inverter_spec(manufacturer: str, model: str) -> dict:
+        getter = getattr(_kb, "get_inverter_spec", None)
+        if callable(getter):
+            return getter(manufacturer, model)
+        return {}
+
+    def get_solar_module_spec(manufacturer: str, model: str) -> dict:
+        getter = getattr(_kb, "get_solar_module_spec", None)
+        if callable(getter):
+            return getter(manufacturer, model)
+        models = SOLAR_MODULES.get(manufacturer, [])
+        if model in models:
+            return {}
+        return {}
 
     def _init_state(key: str, value):
         if key not in st.session_state:
