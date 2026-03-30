@@ -1017,19 +1017,21 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     st.markdown(
         """
         <style>
-          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) [data-testid="stColumn"] {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
           }
 
-          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) [data-testid="stButton"] {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stButton"] {
             width: 100% !important;
           }
 
-          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) button {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] button {
             width: calc(100% - 2mm) !important;
             min-width: 0 !important;
+            min-height: 42px !important;
+            height: 42px !important;
             margin: 0 auto !important;
             display: flex !important;
             justify-content: center !important;
@@ -1042,9 +1044,9 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
         """,
         unsafe_allow_html=True,
     )
-    c1, c2 = st.columns([1, 1], gap="small")
+    st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 1], gap="small", vertical_alignment="center")
     with c1:
-        st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
         if st.button(
             "EN",
             key=f"{key_prefix}_en",
@@ -1140,7 +1142,7 @@ def _render_header(show_logout=True):
         with st.container():
             st.markdown(
                 f"""
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.2rem;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.2rem;transform:translateY(-2mm);">
                   {logo_img}
                   <div class="platform-title-login" style="color:white;text-align:center;">
                     {_t("header.title")}
