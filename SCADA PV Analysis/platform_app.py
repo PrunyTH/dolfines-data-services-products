@@ -814,6 +814,7 @@ _UI_TEXT = {
         "header.logout": "Log out",
         "header.plan.unlimited": "UNLIMITED",
         "header.plan.one_shot": "ONE-SHOT",
+        "login.title": "Client Login",
         "login.subtitle": "Sign in to access your portfolio.",
         "login.email": "Email address",
         "login.password": "Password",
@@ -896,6 +897,7 @@ _UI_TEXT = {
         "header.logout": "Se déconnecter",
         "header.plan.unlimited": "ILLIMITÉ",
         "header.plan.one_shot": "PONCTUEL",
+        "login.title": "Connexion client",
         "login.subtitle": "Connectez-vous pour accéder à votre portefeuille.",
         "login.email": "Adresse e-mail",
         "login.password": "Mot de passe",
@@ -1202,7 +1204,7 @@ def _view_login():
       section[data-testid="stMain"] .block-container {
         max-width: calc(580px - 20mm) !important;
         padding: 0.15rem 2rem calc(1.8rem - 2mm) 2rem !important;
-        margin-top: 0 !important;
+        margin-top: 2mm !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
@@ -1216,12 +1218,12 @@ def _view_login():
 
     _render_header(show_logout=False)
 
-    login_intro_col, login_lang_col = st.columns([4.1, 1.35], vertical_alignment="center")
+    login_intro_col, login_lang_col = st.columns([4.1, 1.35], vertical_alignment="top")
     with login_intro_col:
         st.markdown(f"""
         <div style="margin-bottom:0.25rem;">
           <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
-            Client Login
+            {_t("login.title")}
           </div>
           <div style="font-size:0.80rem;color:rgba(255,255,255,0.50);">
             {_t("login.subtitle")}
@@ -1229,6 +1231,7 @@ def _view_login():
         </div>
         """, unsafe_allow_html=True)
     with login_lang_col:
+        st.markdown("<div style='height:1px;'></div>", unsafe_allow_html=True)
         _render_lang_buttons("login_lang")
 
     email    = st.text_input(_t("login.email"), placeholder="you@company.com", key="login_email")
