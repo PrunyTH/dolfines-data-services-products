@@ -1007,6 +1007,7 @@ def _render_lang_toggle() -> None:
             font-size: 0.95rem !important;
             font-weight: 600 !important;
             letter-spacing: 0.02em !important;
+            white-space: nowrap !important;
           }}
           [data-testid="stHorizontalBlock"]:has(.lang-switch-scope) button:hover {{
             color: white !important;
@@ -1019,7 +1020,7 @@ def _render_lang_toggle() -> None:
         """,
         unsafe_allow_html=True,
     )
-    c1, c2, c3 = st.columns([1, 0.2, 1], vertical_alignment="center")
+    c1, c2, c3 = st.columns([0.7, 0.18, 0.7], vertical_alignment="center")
     with c1:
         st.markdown('<span class="lang-switch-scope"></span>', unsafe_allow_html=True)
         if st.button("EN", key="lang_en_text_simple"):
@@ -1072,7 +1073,7 @@ def _render_header(show_logout=True):
     """, unsafe_allow_html=True)
 
     if show_logout and _logged_in():
-        col_hdr, col_lang, col_btn = st.columns([7.2, 0.75, 1.25])
+        col_hdr, col_lang, col_btn = st.columns([6.4, 1.35, 1.25], vertical_alignment="top")
         with col_hdr:
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:1.4rem;margin-bottom:0.6rem;">
@@ -1091,7 +1092,7 @@ def _render_header(show_logout=True):
             if st.button(_t("header.logout")):
                 _logout()
     else:
-        col_hdr, col_lang = st.columns([7.35, 0.65])
+        col_hdr, col_lang = st.columns([6.6, 1.4], vertical_alignment="top")
         with col_hdr:
             st.markdown(f"""
             <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
