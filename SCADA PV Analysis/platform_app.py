@@ -1014,8 +1014,37 @@ def _render_lang_toggle():
 
 def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     active = _ui_lang()
+    st.markdown(
+        """
+        <style>
+          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) [data-testid="stColumn"] {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+          }
+
+          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) [data-testid="stButton"] {
+            width: 100% !important;
+          }
+
+          [data-testid="stHorizontalBlock"]:has(.login-lang-scope) button {
+            width: calc(100% - 2mm) !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            text-align: center !important;
+            padding-left: 0.2rem !important;
+            padding-right: 0.2rem !important;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     c1, c2 = st.columns([1, 1], gap="small")
     with c1:
+        st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
         if st.button(
             "EN",
             key=f"{key_prefix}_en",
