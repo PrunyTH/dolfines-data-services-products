@@ -1086,26 +1086,29 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
-    c1, c2 = st.columns([1, 1], gap="small", vertical_alignment="center")
-    with c1:
-        st.markdown('<span class="login-lang-en-scope"></span>', unsafe_allow_html=True)
-        if st.button(
-            "EN",
-            key=f"{key_prefix}_en",
-            type="primary" if active == "en" else "secondary",
-            width="stretch",
-        ):
-            _set_ui_lang("en")
-    with c2:
-        st.markdown('<span class="login-lang-fr-scope"></span>', unsafe_allow_html=True)
-        if st.button(
-            "FR",
-            key=f"{key_prefix}_fr",
-            type="primary" if active == "fr" else "secondary",
-            width="stretch",
-        ):
-            _set_ui_lang("fr")
+    with st.container():
+        st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
+        c1, c2 = st.columns([1, 1], gap="small", vertical_alignment="center")
+        with c1:
+            with st.container():
+                st.markdown('<span class="login-lang-en-scope"></span>', unsafe_allow_html=True)
+                if st.button(
+                    "EN",
+                    key=f"{key_prefix}_en",
+                    type="primary" if active == "en" else "secondary",
+                    width="stretch",
+                ):
+                    _set_ui_lang("en")
+        with c2:
+            with st.container():
+                st.markdown('<span class="login-lang-fr-scope"></span>', unsafe_allow_html=True)
+                if st.button(
+                    "FR",
+                    key=f"{key_prefix}_fr",
+                    type="primary" if active == "fr" else "secondary",
+                    width="stretch",
+                ):
+                    _set_ui_lang("fr")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1186,7 +1189,7 @@ def _render_header(show_logout=True):
         with st.container():
             st.markdown(
                 f"""
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.05rem;transform:translateY(-4mm);">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.05rem;transform:translateY(-6mm);">
                   {logo_img}
                   <div class="platform-title-login" style="color:white;text-align:center;">
                     {_t("header.title")}
@@ -1210,8 +1213,8 @@ def _view_login():
       [data-testid="stAppViewBlockContainer"],
       section[data-testid="stMain"] .block-container {
         max-width: calc(580px - 20mm) !important;
-        padding: 0.55rem 2rem 1.8rem 2rem !important;
-        margin-top: 0.35cm !important;
+        padding: 0.15rem 2rem 1.8rem 2rem !important;
+        margin-top: 0 !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
