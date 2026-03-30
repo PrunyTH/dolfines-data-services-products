@@ -991,6 +991,13 @@ def _set_ui_lang_from_choice() -> None:
     st.session_state["ui_lang"] = "fr" if choice == "FR" else "en"
 
 
+def _set_ui_lang(lang: str) -> None:
+    if _ui_lang() != lang:
+        st.session_state["ui_lang"] = lang
+        st.session_state["ui_lang_choice"] = "FR" if lang == "fr" else "EN"
+        st.rerun()
+
+
 def _render_lang_toggle():
     desired_choice = "FR" if _ui_lang() == "fr" else "EN"
     if st.session_state.get("ui_lang_choice") != desired_choice:
@@ -1003,6 +1010,27 @@ def _render_lang_toggle():
         label_visibility="collapsed",
         on_change=_set_ui_lang_from_choice,
     )
+
+
+def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
+    active = _ui_lang()
+    c1, c2 = st.columns([1, 1], gap="small")
+    with c1:
+        if st.button(
+            "EN",
+            key=f"{key_prefix}_en",
+            type="primary" if active == "en" else "secondary",
+            width="stretch",
+        ):
+            _set_ui_lang("en")
+    with c2:
+        if st.button(
+            "FR",
+            key=f"{key_prefix}_fr",
+            type="primary" if active == "fr" else "secondary",
+            width="stretch",
+        ):
+            _set_ui_lang("fr")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1038,8 +1066,8 @@ def _render_header(show_logout=True):
             font-weight: 700;
             letter-spacing: -0.02em;
             white-space: nowrap;
-            font-size: clamp(0.95rem, 2.4vw, 1.28rem);
-            line-height: 1.15;
+            font-size: clamp(0.88rem, 2vw, 1.12rem);
+            line-height: 1.05;
           }
         </style>
         """,
@@ -1080,18 +1108,10 @@ def _render_header(show_logout=True):
             )
 
     else:
-        col_top_spacer, col_top_lang = st.columns(
-            [8.3, 0.85],
-            vertical_alignment="top",
-        )
-
-        with col_top_lang:
-            _render_lang_toggle()
-
         with st.container():
             st.markdown(
                 f"""
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6mm;margin-bottom:0.45rem;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.2rem;">
                   {logo_img}
                   <div class="platform-title-login" style="color:white;text-align:center;">
                     {_t("header.title")}
@@ -1130,16 +1150,20 @@ def _view_login():
 
     _render_header(show_logout=False)
 
-    st.markdown(f"""
-    <div style="margin-bottom:0.4rem;">
-      <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
-        Client Login
-      </div>
-      <div style="font-size:0.80rem;color:rgba(255,255,255,0.50);">
-        {_t("login.subtitle")}
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    login_intro_col, login_lang_col = st.columns([4.1, 1.35], vertical_alignment="center")
+    with login_intro_col:
+        st.markdown(f"""
+        <div style="margin-bottom:0.25rem;">
+          <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:3px;">
+            Client Login
+          </div>
+          <div style="font-size:0.80rem;color:rgba(255,255,255,0.50);">
+            {_t("login.subtitle")}
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with login_lang_col:
+        _render_lang_buttons("login_lang")
 
     email    = st.text_input(_t("login.email"), placeholder="you@company.com", key="login_email")
     password = st.text_input(_t("login.password"), type="password", key="login_pw")
