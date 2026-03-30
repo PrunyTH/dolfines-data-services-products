@@ -986,44 +986,23 @@ def _t(key: str, **kwargs) -> str:
     return text.format(**kwargs)
 
 
+def _set_ui_lang_from_choice() -> None:
+    choice = st.session_state.get("ui_lang_choice", "EN")
+    st.session_state["ui_lang"] = "fr" if choice == "FR" else "en"
+
+
 def _render_lang_toggle():
-    active = _ui_lang()
+    desired_choice = "FR" if _ui_lang() == "fr" else "EN"
+    if st.session_state.get("ui_lang_choice") != desired_choice:
+        st.session_state["ui_lang_choice"] = desired_choice
 
-    st.markdown("""
-    <style>
-    .lang-btn-wrap {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 0.25rem;
-        white-space: nowrap;
-    }
-
-    div[data-testid="stButton"] > button[kind="secondary"] {
-        min-height: 32px !important;
-        height: 32px !important;
-        padding: 0.2rem 0.45rem !important;
-        width: auto !important;
-        min-width: 42px !important;
-        border-radius: 8px !important;
-        font-size: 0.95rem !important;
-        font-weight: 600 !important;
-        line-height: 1 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    c1, c2 = st.columns([1, 1], gap="small")
-    with c1:
-        if st.button("🇬🇧", key="lang_en_flag", type="secondary", use_container_width=False):
-            if active != "en":
-                st.session_state["ui_lang"] = "en"
-                st.rerun()
-    with c2:
-        if st.button("🇫🇷", key="lang_fr_flag", type="secondary", use_container_width=False):
-            if active != "fr":
-                st.session_state["ui_lang"] = "fr"
-                st.rerun()
+    st.selectbox(
+        "Language",
+        options=["EN", "FR"],
+        key="ui_lang_choice",
+        label_visibility="collapsed",
+        on_change=_set_ui_lang_from_choice,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1080,6 +1059,14 @@ def _render_header(show_logout=True):
         margin-bottom: 0.2rem;
       }
 
+      .lang-select-wrap [data-testid="stSelectbox"] {
+        margin-bottom: 0 !important;
+      }
+
+      .lang-select-wrap label {
+        display: none !important;
+      }
+
       /* compact logout button in header only */
       .header-logout-wrap div[data-testid="stButton"] > button {
         width: auto !important;
@@ -1091,7 +1078,7 @@ def _render_header(show_logout=True):
     """, unsafe_allow_html=True)
 
     if show_logout and _logged_in():
-        col_left, col_lang, col_logout = st.columns([7.6, 0.9, 1.2], vertical_alignment="center")
+        col_left, col_lang, col_logout = st.columns([7.2, 1.1, 1.3], vertical_alignment="center")
 
         with col_left:
             st.markdown(f"""
@@ -1105,7 +1092,9 @@ def _render_header(show_logout=True):
             """, unsafe_allow_html=True)
 
         with col_lang:
+            st.markdown('<div class="lang-select-wrap">', unsafe_allow_html=True)
             _render_lang_toggle()
+            st.markdown('</div>', unsafe_allow_html=True)
 
         with col_logout:
             st.markdown('<div class="header-logout-wrap">', unsafe_allow_html=True)
@@ -1114,7 +1103,7 @@ def _render_header(show_logout=True):
             st.markdown('</div>', unsafe_allow_html=True)
 
     else:
-        col_left, col_lang = st.columns([7.8, 1.0], vertical_alignment="center")
+        col_left, col_lang = st.columns([7.6, 1.2], vertical_alignment="center")
 
         with col_left:
             st.markdown(f"""
@@ -1125,7 +1114,9 @@ def _render_header(show_logout=True):
             """, unsafe_allow_html=True)
 
         with col_lang:
+            st.markdown('<div class="lang-select-wrap">', unsafe_allow_html=True)
             _render_lang_toggle()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
