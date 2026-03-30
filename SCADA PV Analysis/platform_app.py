@@ -805,6 +805,184 @@ def _set(key, val):
     st.rerun()
 
 
+_UI_TEXT = {
+    "en": {
+        "header.title": "Performance Analysis Platform",
+        "header.logout": "Log out",
+        "header.plan.unlimited": "UNLIMITED",
+        "header.plan.one_shot": "ONE-SHOT",
+        "login.subtitle": "Sign in to access your portfolio.",
+        "login.email": "Email address",
+        "login.password": "Password",
+        "login.submit": "Sign In →",
+        "login.invalid": "Invalid email or password.",
+        "login.forgotten": "Forgotten your password? Contact us",
+        "portfolio.welcome": "Welcome back, <strong>{name}</strong> &nbsp;—&nbsp; {company}",
+        "portfolio.title": "Your Site Portfolio",
+        "portfolio.empty": "No sites in your portfolio. Add one below.",
+        "portfolio.delete.confirm": "⚠️ Permanently delete <strong>{site}</strong>? This cannot be undone.",
+        "portfolio.delete.yes": "Confirm Delete",
+        "portfolio.delete.no": "Cancel",
+        "portfolio.status.operational": "OPERATIONAL",
+        "portfolio.status.maintenance": "MAINTENANCE",
+        "portfolio.status.offline": "OFFLINE",
+        "portfolio.action.view": "View site",
+        "portfolio.action.edit": "Edit site",
+        "portfolio.action.generate": "Generate report",
+        "portfolio.action.delete": "Delete site",
+        "portfolio.add.title": "➕  Add a new site",
+        "portfolio.add.name": "Site name *",
+        "portfolio.add.capacity.wind": "Capacity (MW) *",
+        "portfolio.add.capacity.solar": "Capacity (MWp DC) *",
+        "portfolio.add.type": "Site type",
+        "portfolio.add.submit": "Add site",
+        "portfolio.add.error.name": "Site name is required.",
+        "portfolio.add.error.capacity": "Capacity is required.",
+        "portfolio.add.error.number": "Capacity must be a number (e.g. 9.84).",
+        "nav.back_portfolio": "← Back to Portfolio",
+        "nav.back": "← Back",
+        "nav.previous_reports": "📋 Previous Reports",
+        "report.generate.title": "Generate Report — {site}",
+        "report.previous.title": "Previous Reports — {site}",
+        "report.previous.empty": "No reports have been generated for this site yet.",
+        "report.previous.loading": "Loading report history…",
+        "report.previous.legacy": "Showing legacy files from the local `previous reports` folder because no structured report history was found.",
+        "site.edit.title": "Edit Site — {site}",
+        "site.edit.name": "Site name",
+        "site.edit.status": "Status",
+        "site.edit.country": "Country",
+        "site.edit.region": "Region",
+        "site.edit.cod": "COD date",
+        "site.edit.wind.section": "Wind Turbine Details",
+        "site.edit.wind.mfr": "Turbine manufacturer",
+        "site.edit.wind.model": "Turbine model",
+        "site.edit.wind.capacity": "Rated capacity per turbine (MW)",
+        "site.edit.wind.count": "Number of turbines",
+        "site.edit.wind.hub": "Hub height (m)",
+        "site.edit.wind.tip": "Height to blade tip (m)",
+        "site.edit.wind.aep": "Expected AEP (GWh/yr)",
+        "site.edit.wind.total": "Calculated site capacity (MW)",
+        "site.edit.wind.rotor": "Detected rotor diameter: {rotor:.0f} m",
+        "site.edit.solar.section": "Solar Equipment Details",
+        "site.edit.solar.multi": "Multiple module types on this site",
+        "site.edit.solar.type_count": "Number of module types",
+        "site.edit.solar.module_type": "Module Type {index}",
+        "site.edit.solar.module_mfr": "Module manufacturer",
+        "site.edit.solar.module_model": "Module model",
+        "site.edit.solar.qty_power": "Module Quantities and Power",
+        "site.edit.solar.qty": "Number of modules for type {index}",
+        "site.edit.solar.power": "Capacity per module for type {index} (Wp)",
+        "site.edit.solar.subtotal": "{label}: {mw:.3f} MWp DC",
+        "site.edit.solar.inv_mfr": "Inverter manufacturer",
+        "site.edit.solar.inv_model": "Inverter model",
+        "site.edit.solar.inv_section": "Inverter Capacity",
+        "site.edit.solar.inv_count": "Number of inverters",
+        "site.edit.solar.inv_power": "Rated capacity per inverter (kW)",
+        "site.edit.solar.total_dc": "Calculated DC capacity (MWp)",
+        "site.edit.solar.total_ac": "Calculated AC capacity (MW)",
+        "site.edit.solar.ratio": "Calculated DC/AC ratio",
+        "site.edit.save": "💾 Save changes",
+        "site.edit.error.site_missing": "Site not found.",
+        "site.edit.error.wind_required": "Please provide a turbine model capacity and a positive turbine count.",
+        "site.edit.error.solar_modules": "Please enter at least one valid module type with quantity and module power.",
+        "site.edit.error.solar_inverters": "Please enter a positive inverter count and inverter capacity.",
+        "site.edit.saved": "Changes saved.",
+    },
+    "fr": {
+        "header.title": "Plateforme d'analyse de performance",
+        "header.logout": "Se déconnecter",
+        "header.plan.unlimited": "ILLIMITÉ",
+        "header.plan.one_shot": "PONCTUEL",
+        "login.subtitle": "Connectez-vous pour accéder à votre portefeuille.",
+        "login.email": "Adresse e-mail",
+        "login.password": "Mot de passe",
+        "login.submit": "Se connecter →",
+        "login.invalid": "Adresse e-mail ou mot de passe invalide.",
+        "login.forgotten": "Mot de passe oublié ? Contactez-nous",
+        "portfolio.welcome": "Bon retour, <strong>{name}</strong> &nbsp;—&nbsp; {company}",
+        "portfolio.title": "Votre portefeuille de sites",
+        "portfolio.empty": "Aucun site dans votre portefeuille. Ajoutez-en un ci-dessous.",
+        "portfolio.delete.confirm": "⚠️ Supprimer définitivement <strong>{site}</strong> ? Cette action est irréversible.",
+        "portfolio.delete.yes": "Confirmer",
+        "portfolio.delete.no": "Annuler",
+        "portfolio.status.operational": "EN SERVICE",
+        "portfolio.status.maintenance": "MAINTENANCE",
+        "portfolio.status.offline": "HORS SERVICE",
+        "portfolio.action.view": "Voir le site",
+        "portfolio.action.edit": "Modifier le site",
+        "portfolio.action.generate": "Générer un rapport",
+        "portfolio.action.delete": "Supprimer le site",
+        "portfolio.add.title": "➕  Ajouter un site",
+        "portfolio.add.name": "Nom du site *",
+        "portfolio.add.capacity.wind": "Capacité (MW) *",
+        "portfolio.add.capacity.solar": "Capacité (MWc DC) *",
+        "portfolio.add.type": "Type de site",
+        "portfolio.add.submit": "Ajouter le site",
+        "portfolio.add.error.name": "Le nom du site est obligatoire.",
+        "portfolio.add.error.capacity": "La capacité est obligatoire.",
+        "portfolio.add.error.number": "La capacité doit être un nombre (ex. 9,84).",
+        "nav.back_portfolio": "← Retour au portefeuille",
+        "nav.back": "← Retour",
+        "nav.previous_reports": "📋 Rapports précédents",
+        "report.generate.title": "Générer un rapport — {site}",
+        "report.previous.title": "Rapports précédents — {site}",
+        "report.previous.empty": "Aucun rapport n'a encore été généré pour ce site.",
+        "report.previous.loading": "Chargement de l'historique des rapports…",
+        "report.previous.legacy": "Affichage des anciens fichiers du dossier local `previous reports` car aucun historique structuré n'a été trouvé.",
+        "site.edit.title": "Modifier le site — {site}",
+        "site.edit.name": "Nom du site",
+        "site.edit.status": "Statut",
+        "site.edit.country": "Pays",
+        "site.edit.region": "Région",
+        "site.edit.cod": "Date de mise en service",
+        "site.edit.wind.section": "Détails de l'éolienne",
+        "site.edit.wind.mfr": "Constructeur de l'éolienne",
+        "site.edit.wind.model": "Modèle d'éolienne",
+        "site.edit.wind.capacity": "Puissance nominale par éolienne (MW)",
+        "site.edit.wind.count": "Nombre d'éoliennes",
+        "site.edit.wind.hub": "Hauteur de moyeu (m)",
+        "site.edit.wind.tip": "Hauteur en bout de pale (m)",
+        "site.edit.wind.aep": "PEA attendue (GWh/an)",
+        "site.edit.wind.total": "Capacité calculée du site (MW)",
+        "site.edit.wind.rotor": "Diamètre de rotor détecté : {rotor:.0f} m",
+        "site.edit.solar.section": "Détails des équipements solaires",
+        "site.edit.solar.multi": "Plusieurs types de modules sur ce site",
+        "site.edit.solar.type_count": "Nombre de types de modules",
+        "site.edit.solar.module_type": "Type de module {index}",
+        "site.edit.solar.module_mfr": "Fabricant du module",
+        "site.edit.solar.module_model": "Modèle du module",
+        "site.edit.solar.qty_power": "Quantités et puissances des modules",
+        "site.edit.solar.qty": "Nombre de modules pour le type {index}",
+        "site.edit.solar.power": "Puissance par module pour le type {index} (Wc)",
+        "site.edit.solar.subtotal": "{label} : {mw:.3f} MWc DC",
+        "site.edit.solar.inv_mfr": "Fabricant de l'onduleur",
+        "site.edit.solar.inv_model": "Modèle d'onduleur",
+        "site.edit.solar.inv_section": "Capacité des onduleurs",
+        "site.edit.solar.inv_count": "Nombre d'onduleurs",
+        "site.edit.solar.inv_power": "Puissance nominale par onduleur (kW)",
+        "site.edit.solar.total_dc": "Capacité DC calculée (MWc)",
+        "site.edit.solar.total_ac": "Capacité AC calculée (MW)",
+        "site.edit.solar.ratio": "Ratio DC/AC calculé",
+        "site.edit.save": "💾 Enregistrer les modifications",
+        "site.edit.error.site_missing": "Site introuvable.",
+        "site.edit.error.wind_required": "Veuillez renseigner une puissance d'éolienne et un nombre d'éoliennes positif.",
+        "site.edit.error.solar_modules": "Veuillez renseigner au moins un type de module valide avec quantité et puissance.",
+        "site.edit.error.solar_inverters": "Veuillez renseigner un nombre d'onduleurs et une puissance d'onduleur positifs.",
+        "site.edit.saved": "Modifications enregistrées.",
+    },
+}
+
+
+def _ui_lang() -> str:
+    return st.session_state.get("ui_lang", "en")
+
+
+def _t(key: str, **kwargs) -> str:
+    lang = _ui_lang()
+    text = _UI_TEXT.get(lang, _UI_TEXT["en"]).get(key, _UI_TEXT["en"].get(key, key))
+    return text.format(**kwargs)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HEADER  (shown on all authenticated pages)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -813,36 +991,54 @@ def _render_header(show_logout=True):
     user = st.session_state.get("user", {})
     plan = user.get("plan", "")
     plan_html = (
-        "<span class='plan-unlimited'>UNLIMITED</span>" if plan == "unlimited"
-        else "<span class='plan-one-shot'>ONE-SHOT</span>"
+        f"<span class='plan-unlimited'>{_t('header.plan.unlimited')}</span>" if plan == "unlimited"
+        else f"<span class='plan-one-shot'>{_t('header.plan.one_shot')}</span>"
     ) if plan else ""
 
     if show_logout and _logged_in():
-        col_hdr, col_btn = st.columns([5, 1])
+        col_hdr, col_lang, col_btn = st.columns([5, 1.2, 1])
         with col_hdr:
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:1.4rem;margin-bottom:0.6rem;">
               {logo_img}
               <div>
                 <div style="font-size:1.45rem;font-weight:700;color:white;line-height:1.2;white-space:nowrap;">
-                  Performance Analysis Platform
+                  {_t("header.title")}
                 </div>
                 {('<div style="font-size:0.84rem;color:rgba(255,255,255,0.55);margin-top:0.15rem;white-space:nowrap;">' + plan_html + '</div>') if plan_html else ''}
               </div>
             </div>
             """, unsafe_allow_html=True)
+        with col_lang:
+            st.selectbox(
+                "Language",
+                ["en", "fr"],
+                key="ui_lang",
+                format_func=lambda value: "🇬🇧" if value == "en" else "🇫🇷",
+                label_visibility="collapsed",
+            )
         with col_btn:
-            if st.button("Log out"):
+            if st.button(_t("header.logout")):
                 _logout()
     else:
-        st.markdown(f"""
-        <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
-          {logo_img}
-          <div style="font-size:1.35rem;font-weight:700;color:white;line-height:1.2;text-align:center;">
-            Performance Analysis Platform
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        col_hdr, col_lang = st.columns([5, 1.2])
+        with col_hdr:
+            st.markdown(f"""
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10mm;margin-bottom:0.6rem;">
+              {logo_img}
+              <div style="font-size:1.35rem;font-weight:700;color:white;line-height:1.2;text-align:center;">
+                {_t("header.title")}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_lang:
+            st.selectbox(
+                "Language",
+                ["en", "fr"],
+                key="ui_lang",
+                format_func=lambda value: "🇬🇧" if value == "en" else "🇫🇷",
+                label_visibility="collapsed",
+            )
     st.divider()
 
 
@@ -879,14 +1075,14 @@ def _view_login():
         Client Login
       </div>
       <div style="font-size:0.80rem;color:rgba(255,255,255,0.50);">
-        Sign in to access your portfolio.
+        {_t("login.subtitle")}
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    email    = st.text_input("Email address", placeholder="you@company.com", key="login_email")
-    password = st.text_input("Password", type="password", key="login_pw")
-    submit   = st.button("Sign In →", width="stretch")
+    email    = st.text_input(_t("login.email"), placeholder="you@company.com", key="login_email")
+    password = st.text_input(_t("login.password"), type="password", key="login_pw")
+    submit   = st.button(_t("login.submit"), width="stretch")
 
     if submit:
         user = USERS.get(email.strip().lower())
@@ -895,13 +1091,13 @@ def _view_login():
             st.session_state["view"]  = "portfolio"
             st.rerun()
         else:
-            st.error("Invalid email or password.")
+            st.error(_t("login.invalid"))
 
     st.markdown("""
     <div style="text-align:center;margin-top:0.8rem;font-size:0.78rem;">
       <a href="mailto:consulting@8p2.fr?subject=Password%20Reset%20Request"
          style="color:rgba(255,255,255,0.40);text-decoration:none;">
-        Forgotten your password? Contact us
+        {_t("login.forgotten")}
       </a>
     </div>
     <div style="text-align:center;margin-top:1.1rem;font-size:0.73rem;
@@ -992,14 +1188,13 @@ def _view_portfolio():
     st.markdown(f"""
     <div style="margin-bottom:1.2rem;">
       <span style="font-size:1.05rem;color:rgba(255,255,255,0.90);">
-        Welcome back, <strong>{user['display_name']}</strong>
-        &nbsp;—&nbsp; {user['company']}
+        {_t("portfolio.welcome", name=user['display_name'], company=user['company'])}
       </span>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown(
-        "<div class='step-hdr'>Your Site Portfolio</div>",
+        f"<div class='step-hdr'>{_t('portfolio.title')}</div>",
         unsafe_allow_html=True)
 
     # Build the full list: built-in sites (minus deleted) + user-added sites
@@ -1072,7 +1267,7 @@ def _view_portfolio():
         return ""
 
     if not all_items:
-        st.info("No sites in your portfolio. Add one below.")
+        st.info(_t("portfolio.empty"))
     else:
         # Pending-delete confirmation rows — always full-width
         for site_id, site, is_custom in all_items:
@@ -1084,11 +1279,10 @@ def _view_portfolio():
                     f"<div class='pvpat-confirm-banner' style='background:rgba(229,57,53,0.15);"
                     f"border:1px solid #e53935;border-radius:8px;padding:0.75rem 1.1rem;"
                     f"color:white;font-size:0.92rem;'>"
-                    f"⚠️ Permanently delete <strong>{site['display_name']}</strong>? "
-                    f"This cannot be undone.</div>",
+                    f"{_t('portfolio.delete.confirm', site=site['display_name'])}</div>",
                     unsafe_allow_html=True)
             with col_yes:
-                if st.button("Confirm Delete", key=f"yes_del_{site_id}"):
+                if st.button(_t("portfolio.delete.yes"), key=f"yes_del_{site_id}"):
                     st.session_state["pending_delete"] = None
                     if is_custom:
                         st.session_state["custom_sites"].pop(site_id, None)
@@ -1096,7 +1290,7 @@ def _view_portfolio():
                         st.session_state["deleted_sites"].add(site_id)
                     st.rerun()
             with col_no:
-                if st.button("Cancel", key=f"cancel_del_{site_id}"):
+                if st.button(_t("portfolio.delete.no"), key=f"cancel_del_{site_id}"):
                     st.session_state["pending_delete"] = None
                     st.rerun()
 
@@ -1106,8 +1300,8 @@ def _view_portfolio():
         for site_id, site, is_custom in normal_items:
             cap_mwp    = site.get("cap_dc_kwp", 0) / 1000
             status     = site.get("status", "operational")
-            status_lbl = {"operational": "OPERATIONAL", "maintenance": "MAINTENANCE",
-                          "offline": "OFFLINE"}.get(status, status.upper())
+            status_lbl = {"operational": _t("portfolio.status.operational"), "maintenance": _t("portfolio.status.maintenance"),
+                          "offline": _t("portfolio.status.offline")}.get(status, status.upper())
             status_col = {"operational": "#2E8B57", "maintenance": "#E67E22",
                           "offline": "#C0392B"}.get(status, "#888")
             site_icon  = "🌬️" if site.get("site_type") == "wind" else "☀️"
@@ -1140,49 +1334,49 @@ def _view_portfolio():
                 st.markdown('<span class="pvpat-icons"></span>', unsafe_allow_html=True)
                 ic1, ic2, ic3, ic4 = st.columns(4)
                 with ic1:
-                    if st.button("ⓘ", key=f"sc_{site_id}", help="View site"):
+                    if st.button("ⓘ", key=f"sc_{site_id}", help=_t("portfolio.action.view")):
                         st.session_state["selected_site"] = site_id
                         st.session_state["view"] = "site_detail"
                         st.rerun()
                 with ic2:
-                    if st.button("✎", key=f"ed_{site_id}", help="Edit site"):
+                    if st.button("✎", key=f"ed_{site_id}", help=_t("portfolio.action.edit")):
                         st.session_state["selected_site"] = site_id
                         st.session_state["view"] = "site_edit"
                         st.rerun()
                 with ic3:
-                    if st.button("≡", key=f"go_{site_id}", help="Generate report"):
+                    if st.button("≡", key=f"go_{site_id}", help=_t("portfolio.action.generate")):
                         st.session_state["selected_site"] = site_id
                         st.session_state["view"] = "report_select"
                         st.rerun()
                 with ic4:
-                    if st.button("✕", key=f"del_{site_id}", help="Delete site"):
+                    if st.button("✕", key=f"del_{site_id}", help=_t("portfolio.action.delete")):
                         st.session_state["pending_delete"] = site_id
                         st.rerun()
 
     # ── Add new site ───────────────────────────────────────────────────────────
     st.divider()
-    with st.expander("➕  Add a new site"):
+    with st.expander(_t("portfolio.add.title")):
         _is_wind_add = st.session_state.get("ns_type", "☀️ Solar") == "🌬️ Wind"
         c1, c2, c3 = st.columns(3)
         with c1:
             _name_ph = "e.g. Nordex Wind Farm" if _is_wind_add else "e.g. Sahara Solar Park"
-            new_name = st.text_input("Site name *", placeholder=_name_ph, key="ns_name")
+            new_name = st.text_input(_t("portfolio.add.name"), placeholder=_name_ph, key="ns_name")
         with c2:
-            _cap_lbl = "Capacity (MW) *" if _is_wind_add else "Capacity (MWp DC) *"
+            _cap_lbl = _t("portfolio.add.capacity.wind") if _is_wind_add else _t("portfolio.add.capacity.solar")
             new_cap  = st.text_input(_cap_lbl, placeholder="e.g. 9.84", key="ns_cap")
         with c3:
-            new_type = st.radio("Site type", ["☀️ Solar", "🌬️ Wind"], horizontal=True, key="ns_type")
+            new_type = st.radio(_t("portfolio.add.type"), ["☀️ Solar", "🌬️ Wind"], horizontal=True, key="ns_type")
 
-        if st.button("Add site", key="btn_add_site"):
+        if st.button(_t("portfolio.add.submit"), key="btn_add_site"):
             if not new_name.strip():
-                st.error("Site name is required.")
+                st.error(_t("portfolio.add.error.name"))
             elif not new_cap.strip():
-                st.error("Capacity is required.")
+                st.error(_t("portfolio.add.error.capacity"))
             else:
                 try:
                     cap_kwp = float(new_cap.replace(",", ".")) * 1000
                 except ValueError:
-                    st.error("Capacity must be a number (e.g. 9.84).")
+                    st.error(_t("portfolio.add.error.number"))
                     cap_kwp = None
                 if cap_kwp is not None:
                     slug = "USR_" + "".join(c if c.isalnum() else "_" for c in new_name.upper())[:20]
@@ -1227,7 +1421,7 @@ def _view_report_select():
 
     col_back, col_hist, _ = st.columns([2, 2, 2])
     with col_back:
-        if st.button("← Back to Portfolio"):
+        if st.button(_t("nav.back_portfolio")):
             st.session_state.pop("report_choice", None)
             st.session_state["view"] = "portfolio"
             st.rerun()
@@ -1237,13 +1431,13 @@ def _view_report_select():
             " button{background:#22c55e!important;color:#fff!important;"
             "border:none!important;font-weight:600!important;}</style>",
             unsafe_allow_html=True)
-        if st.button("📋 Previous Reports", key="btn_prev_reports",
+        if st.button(_t("nav.previous_reports"), key="btn_prev_reports",
                      width="stretch"):
             st.session_state["view"] = "report_history"
             st.rerun()
 
     st.markdown(
-        f"<div class='step-hdr'>Generate Report — {site.get('display_name','')}</div>",
+        f"<div class='step-hdr'>{_t('report.generate.title', site=site.get('display_name',''))}</div>",
         unsafe_allow_html=True)
 
     st.markdown("""
@@ -2234,6 +2428,14 @@ def _view_site_edit():
                 return candidate
         return ""
 
+    def _derive_wind_defaults(spec: dict, turbine_count: int) -> tuple[float | None, int | None, int | None, float | None]:
+        rotor = _safe_float(spec.get("rotor_diameter_m")) if spec else None
+        rated_mw = _safe_float(spec.get("rated_mw")) if spec else None
+        hub_height = int(round(max(rotor * 0.82, 80))) if rotor else None
+        tip_height = int(round(hub_height + rotor / 2)) if hub_height and rotor else None
+        expected_aep = round(rated_mw * max(turbine_count, 1) * 2.9, 1) if rated_mw else None
+        return rated_mw, hub_height, tip_height, expected_aep
+
     def _infer_module_rows(site_cfg: dict) -> list[dict]:
         module_mix = site_cfg.get("module_mix")
         if isinstance(module_mix, list):
@@ -2287,16 +2489,16 @@ def _view_site_edit():
 
     col_back, _ = st.columns([2, 4])
     with col_back:
-        if st.button("← Back to Portfolio", key="edit_back"):
+        if st.button(_t("nav.back_portfolio"), key="edit_back"):
             st.session_state["view"] = "portfolio"
             st.rerun()
 
     st.markdown(
-        f"<div class='step-hdr'>Edit Site — {site.get('display_name', site_id)}</div>",
+        f"<div class='step-hdr'>{_t('site.edit.title', site=site.get('display_name', site_id))}</div>",
         unsafe_allow_html=True)
 
     if not site:
-        st.error("Site not found.")
+        st.error(_t("site.edit.error.site_missing"))
         return
 
     is_wind = site.get("site_type") == "wind"
@@ -2311,12 +2513,12 @@ def _view_site_edit():
     _init_state(f"{prefix}_cod", site.get("cod", ""))
 
     if is_wind:
-        st.markdown("<div class='sub-hdr'>Wind Turbine Details</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sub-hdr'>{_t('site.edit.wind.section')}</div>", unsafe_allow_html=True)
         _mfr_list = [""] + list(WIND_TURBINES.keys())
         _cur_mfr  = detect_wind_manufacturer(site.get("technology", ""))
         _mfr_idx  = _mfr_list.index(_cur_mfr) if _cur_mfr in _mfr_list else 0
         new_turbine_mfr = st.selectbox(
-            "Turbine manufacturer",
+            _t("site.edit.wind.mfr"),
             _mfr_list,
             index=_mfr_idx,
             key=f"edit_wind_mfr_{site_id}",
@@ -2341,30 +2543,43 @@ def _view_site_edit():
         if _turbine_models:
             if st.session_state.get(_wind_model_key) not in _turbine_models:
                 st.session_state[_wind_model_key] = _wind_model_default if _wind_model_default in _turbine_models else ""
-            st.selectbox("Turbine model", [""] + _turbine_models, key=_wind_model_key)
+            st.selectbox(_t("site.edit.wind.model"), [""] + _turbine_models, key=_wind_model_key)
             new_tech = st.session_state.get(_wind_model_key, "")
         else:
             _init_state(_wind_model_key, site.get("technology", ""))
-            st.text_input("Turbine model", key=_wind_model_key, placeholder="e.g. V136-4.5")
+            st.text_input(_t("site.edit.wind.model"), key=_wind_model_key, placeholder="e.g. V136-4.5")
             new_tech = st.session_state.get(_wind_model_key, "")
 
         _wind_spec = get_wind_turbine_spec(new_turbine_mfr, new_tech)
-        _wind_default_capacity = _wind_spec.get("rated_mw")
+        _current_turbine_count = _safe_int(st.session_state.get(_wind_qty_key)) or _safe_int(site.get("n_inverters")) or 1
+        _wind_default_capacity, _wind_default_hub, _wind_default_tip, _wind_default_aep = _derive_wind_defaults(
+            _wind_spec, _current_turbine_count
+        )
         if _wind_default_capacity is None:
             _wind_default_capacity = (site.get("inv_ac_kw") or 0) / 1000 if site.get("inv_ac_kw") else None
+        if _wind_default_hub is None:
+            _wind_default_hub = _safe_int(site.get("hub_height_m"))
+        if _wind_default_tip is None:
+            _wind_default_tip = _safe_int(site.get("tip_height_m"))
+        if _wind_default_aep is None:
+            _wind_default_aep = _safe_float(site.get("expected_aep_gwh"))
+
         _init_state(_wind_capacity_key, _fmt_number(_wind_default_capacity, 3))
         if st.session_state.get(_wind_last_model_key) != new_tech:
             st.session_state[_wind_last_model_key] = new_tech
             st.session_state[_wind_capacity_key] = _fmt_number(_wind_default_capacity, 3)
+            st.session_state[_wind_hub_key] = str(_wind_default_hub or "")
+            st.session_state[_wind_tip_key] = str(_wind_default_tip or "")
+            st.session_state[_wind_aep_key] = _fmt_number(_wind_default_aep, 1)
     else:
-        st.markdown("<div class='sub-hdr'>Solar Equipment Details</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sub-hdr'>{_t('site.edit.solar.section')}</div>", unsafe_allow_html=True)
         _module_rows = _infer_module_rows(site)
         _module_type_default = max(1, min(len(_module_rows), 4))
         _init_state(f"{prefix}_module_multi", _module_type_default > 1)
         _init_state(f"{prefix}_module_type_count", _module_type_default)
 
         _multi_modules = st.checkbox(
-            "Multiple module types on this site",
+            _t("site.edit.solar.multi"),
             key=f"{prefix}_module_multi",
         )
         if not _multi_modules:
@@ -2374,7 +2589,7 @@ def _view_site_edit():
             count_options = [1, 2, 3, 4]
             count_index = count_options.index(current_count) if current_count in count_options else 1
             st.selectbox(
-                "Number of module types",
+                _t("site.edit.solar.type_count"),
                 count_options,
                 index=count_index,
                 key=f"{prefix}_module_type_count",
@@ -2394,11 +2609,11 @@ def _view_site_edit():
             _init_state(power_key, _fmt_number(existing.get("power_wp"), 1))
             _init_state(qty_key, str(existing.get("quantity", "") or ""))
 
-            st.markdown(f"**Module Type {idx + 1}**")
+            st.markdown(f"**{_t('site.edit.solar.module_type', index=idx + 1)}**")
             mod_col1, mod_col2 = st.columns(2)
             with mod_col1:
                 st.selectbox(
-                    "Module manufacturer",
+                    _t("site.edit.solar.module_mfr"),
                     [""] + SOLAR_MODULE_MANUFACTURERS,
                     key=mfr_key,
                 )
@@ -2408,12 +2623,12 @@ def _view_site_edit():
                     if st.session_state.get(model_key) not in _module_models:
                         st.session_state[model_key] = existing.get("model", "") if existing.get("model", "") in _module_models else ""
                     st.selectbox(
-                        "Module model",
+                        _t("site.edit.solar.module_model"),
                         [""] + _module_models,
                         key=model_key,
                     )
                 else:
-                    st.text_input("Module model", key=model_key, placeholder="e.g. Hi-MO 6 LR5-72HTH")
+                    st.text_input(_t("site.edit.solar.module_model"), key=model_key, placeholder="e.g. Hi-MO 6 LR5-72HTH")
 
             _module_spec = get_solar_module_spec(st.session_state.get(mfr_key, ""), st.session_state.get(model_key, ""))
             _module_default_power = _module_spec.get("power_wp")
@@ -2428,7 +2643,7 @@ def _view_site_edit():
         _cur_inv_mfr  = detect_inverter_manufacturer(site.get("inverter_model", ""))
         _inv_mfr_idx  = _inv_mfr_list.index(_cur_inv_mfr) if _cur_inv_mfr in _inv_mfr_list else 0
         new_inv_mfr = st.selectbox(
-            "Inverter manufacturer",
+            _t("site.edit.solar.inv_mfr"),
             _inv_mfr_list,
             index=_inv_mfr_idx,
             key=f"edit_inv_mfr_{site_id}",
@@ -2445,9 +2660,9 @@ def _view_site_edit():
         if _inv_models:
             if st.session_state.get(_inv_model_key) not in _inv_models:
                 st.session_state[_inv_model_key] = _find_matching_model(_inv_models, site.get("inverter_model", ""))
-            st.selectbox("Inverter model", [""] + _inv_models, key=_inv_model_key)
+            st.selectbox(_t("site.edit.solar.inv_model"), [""] + _inv_models, key=_inv_model_key)
         else:
-            st.text_input("Inverter model", key=_inv_model_key, placeholder="e.g. SG250HX")
+            st.text_input(_t("site.edit.solar.inv_model"), key=_inv_model_key, placeholder="e.g. SG250HX")
 
         _inv_spec = get_inverter_spec(new_inv_mfr, st.session_state.get(_inv_model_key, ""))
         _inv_default_power = _inv_spec.get("ac_kw")
@@ -2462,16 +2677,16 @@ def _view_site_edit():
 
     c1, c2 = st.columns(2)
     with c1:
-        st.text_input("Site name", key=f"{prefix}_name")
+        st.text_input(_t("site.edit.name"), key=f"{prefix}_name")
         st.selectbox(
-            "Status",
+            _t("site.edit.status"),
             ["operational", "maintenance", "offline"],
             key=f"{prefix}_status",
         )
     with c2:
-        st.text_input("Country", key=f"{prefix}_country")
-        st.text_input("Region", key=f"{prefix}_region")
-        st.text_input("COD date", key=f"{prefix}_cod")
+        st.text_input(_t("site.edit.country"), key=f"{prefix}_country")
+        st.text_input(_t("site.edit.region"), key=f"{prefix}_region")
+        st.text_input(_t("site.edit.cod"), key=f"{prefix}_cod")
 
     if is_wind:
         _wind_unit_mw = _safe_float(st.session_state.get(_wind_capacity_key)) or 0.0
@@ -2481,40 +2696,40 @@ def _view_site_edit():
         w1, w2 = st.columns(2)
         with w1:
             st.text_input(
-                "Rated capacity per turbine (MW)",
+                _t("site.edit.wind.capacity"),
                 key=_wind_capacity_key,
                 placeholder="e.g. 4.5",
             )
             st.text_input(
-                "Hub height (m)",
+                _t("site.edit.wind.hub"),
                 key=_wind_hub_key,
                 placeholder="e.g. 112",
             )
         with w2:
             st.text_input(
-                "Number of turbines",
+                _t("site.edit.wind.count"),
                 key=_wind_qty_key,
                 placeholder="e.g. 4",
             )
             st.text_input(
-                "Height to blade tip (m)",
+                _t("site.edit.wind.tip"),
                 key=_wind_tip_key,
                 placeholder="e.g. 180",
             )
 
         st.text_input(
-            "Expected AEP (GWh/yr)",
+            _t("site.edit.wind.aep"),
             key=_wind_aep_key,
             placeholder="e.g. 52.4",
         )
-        st.text_input("Calculated site capacity (MW)", value=_fmt_number(_wind_total_mw, 3), disabled=True)
+        st.text_input(_t("site.edit.wind.total"), value=_fmt_number(_wind_total_mw, 3), disabled=True)
         if _wind_spec.get("rotor_diameter_m"):
-            st.caption(f"Detected rotor diameter: {_wind_spec['rotor_diameter_m']:.0f} m")
-        saved = st.button("💾 Save changes", key=f"{prefix}_save", width="content")
+            st.caption(_t("site.edit.wind.rotor", rotor=_wind_spec["rotor_diameter_m"]))
+        saved = st.button(_t("site.edit.save"), key=f"{prefix}_save", width="content")
 
     else:
         solar_rows = []
-        st.markdown("**Module Quantities and Power**")
+        st.markdown(f"**{_t('site.edit.solar.qty_power')}**")
         for idx in range(module_type_count):
             mfr_key = f"{prefix}_module_mfr_{idx}"
             model_key = f"{prefix}_module_model_{idx}"
@@ -2524,13 +2739,13 @@ def _view_site_edit():
             row_col1, row_col2 = st.columns(2)
             with row_col1:
                 st.text_input(
-                    f"Number of modules for type {idx + 1}",
+                    _t("site.edit.solar.qty", index=idx + 1),
                     key=qty_key,
                     placeholder="e.g. 10815",
                 )
             with row_col2:
                 st.text_input(
-                    f"Capacity per module for type {idx + 1} (Wp)",
+                    _t("site.edit.solar.power", index=idx + 1),
                     key=power_key,
                     placeholder="e.g. 585",
                 )
@@ -2540,8 +2755,8 @@ def _view_site_edit():
             subtotal_kwp = qty * power_wp / 1000.0
             manufacturer = st.session_state.get(mfr_key, "")
             model = st.session_state.get(model_key, "")
-            label = " ".join(part for part in (manufacturer, model) if part).strip() or f"Module type {idx + 1}"
-            st.caption(f"{label}: {subtotal_kwp / 1000:.3f} MWp DC")
+            label = " ".join(part for part in (manufacturer, model) if part).strip() or _t("site.edit.solar.module_type", index=idx + 1)
+            st.caption(_t("site.edit.solar.subtotal", label=label, mw=subtotal_kwp / 1000.0))
             solar_rows.append({
                 "manufacturer": manufacturer,
                 "model": model,
@@ -2549,12 +2764,12 @@ def _view_site_edit():
                 "power_wp": power_wp,
             })
 
-        st.markdown("**Inverter Capacity**")
+        st.markdown(f"**{_t('site.edit.solar.inv_section')}**")
         inv_col1, inv_col2 = st.columns(2)
         with inv_col1:
-            st.text_input("Number of inverters", key=_inv_qty_key, placeholder="e.g. 21")
+            st.text_input(_t("site.edit.solar.inv_count"), key=_inv_qty_key, placeholder="e.g. 21")
         with inv_col2:
-            st.text_input("Rated capacity per inverter (kW)", key=_inv_power_key, placeholder="e.g. 250")
+            st.text_input(_t("site.edit.solar.inv_power"), key=_inv_power_key, placeholder="e.g. 250")
 
         total_modules = sum(row["quantity"] for row in solar_rows)
         total_dc_kwp = sum(row["quantity"] * row["power_wp"] / 1000.0 for row in solar_rows)
@@ -2566,13 +2781,13 @@ def _view_site_edit():
 
         sum_col1, sum_col2, sum_col3 = st.columns(3)
         with sum_col1:
-            st.text_input("Calculated DC capacity (MWp)", value=_fmt_number(total_dc_kwp / 1000.0, 3), disabled=True)
+            st.text_input(_t("site.edit.solar.total_dc"), value=_fmt_number(total_dc_kwp / 1000.0, 3), disabled=True)
         with sum_col2:
-            st.text_input("Calculated AC capacity (MW)", value=_fmt_number(total_ac_kw / 1000.0, 3), disabled=True)
+            st.text_input(_t("site.edit.solar.total_ac"), value=_fmt_number(total_ac_kw / 1000.0, 3), disabled=True)
         with sum_col3:
-            st.text_input("Calculated DC/AC ratio", value=_fmt_number(dc_ac_ratio, 3), disabled=True)
+            st.text_input(_t("site.edit.solar.ratio"), value=_fmt_number(dc_ac_ratio, 3), disabled=True)
 
-        saved = st.button("💾 Save changes", key=f"{prefix}_save", width="content")
+        saved = st.button(_t("site.edit.save"), key=f"{prefix}_save", width="content")
 
     if saved:
         updates: dict = {
@@ -2587,7 +2802,7 @@ def _view_site_edit():
             unit_cap_mw = _safe_float(st.session_state.get(_wind_capacity_key))
             n_turbines = _safe_int(st.session_state.get(_wind_qty_key))
             if not unit_cap_mw or unit_cap_mw <= 0 or not n_turbines or n_turbines <= 0:
-                st.error("Please provide a turbine model capacity and a positive turbine count.")
+                st.error(_t("site.edit.error.wind_required"))
                 return
 
             total_kw = unit_cap_mw * n_turbines * 1000.0
@@ -2616,10 +2831,10 @@ def _view_site_edit():
                 if row["quantity"] > 0 and row["power_wp"] > 0
             ]
             if not clean_rows:
-                st.error("Please enter at least one valid module type with quantity and module power.")
+                st.error(_t("site.edit.error.solar_modules"))
                 return
             if total_ac_kw <= 0 or inv_count <= 0:
-                st.error("Please enter a positive inverter count and inverter capacity.")
+                st.error(_t("site.edit.error.solar_inverters"))
                 return
 
             updates.update({
@@ -2647,7 +2862,7 @@ def _view_site_edit():
 
         _sync_custom_sites()
         _save_custom_sites_to_disk()
-        st.success("Changes saved.")
+        st.success(_t("site.edit.saved"))
         st.session_state["view"] = "portfolio"
         st.rerun()
 
@@ -2706,15 +2921,15 @@ def _view_report_history():
 
     col_back, _ = st.columns([2, 4])
     with col_back:
-        if st.button("← Back", key="hist_back"):
+        if st.button(_t("nav.back"), key="hist_back"):
             st.session_state["view"] = "report_select"
             st.rerun()
 
     st.markdown(
-        f"<div class='step-hdr'>Previous Reports — {site.get('display_name', '')}</div>",
+        f"<div class='step-hdr'>{_t('report.previous.title', site=site.get('display_name', ''))}</div>",
         unsafe_allow_html=True)
 
-    with st.spinner("Loading report history…"):
+    with st.spinner(_t("report.previous.loading")):
         history = _load_report_history()
     reports = history.get(site_id, [])
     legacy_reports = _list_legacy_reports() if not reports else []
@@ -2722,12 +2937,12 @@ def _view_report_history():
     if not reports and not legacy_reports:
         st.markdown(
             "<p style='color:rgba(255,255,255,0.55);margin-top:1.5rem;'>"
-            "No reports have been generated for this site yet.</p>",
+            + _t("report.previous.empty") + "</p>",
             unsafe_allow_html=True)
         return
 
     if legacy_reports:
-        st.caption("Showing legacy files from the local `previous reports` folder because no structured report history was found.")
+        st.caption(_t("report.previous.legacy"))
         reports = legacy_reports
 
     # Track which entry the user wants to download (avoids loading all PDFs at once)
