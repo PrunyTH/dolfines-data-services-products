@@ -1015,13 +1015,19 @@ def _render_lang_toggle():
 def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     active = _ui_lang()
     active_selector = (
-        '[data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(1) button'
+        '[data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button'
         if active == "en"
-        else '[data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(2) button'
+        else '[data-testid="stVerticalBlock"]:has(.login-lang-fr-scope) [data-testid="stButton"] > button'
     )
     st.markdown(
         f"""
         <style>
+          .login-lang-scope,
+          .login-lang-en-scope,
+          .login-lang-fr-scope {{
+            display: none !important;
+          }}
+
           [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {{
             display: flex !important;
             justify-content: center !important;
@@ -1053,7 +1059,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
             background-position: center !important;
           }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(1) button {{
+          [data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button {{
             background-color: #1f3f88 !important;
             background-image:
               linear-gradient(90deg, transparent 42%, #ffffff 42%, #ffffff 58%, transparent 58%),
@@ -1066,7 +1072,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
               linear-gradient(-26deg, transparent 46%, #c8102e 46%, #c8102e 48.5%, transparent 48.5%, transparent 51.5%, #c8102e 51.5%, #c8102e 54%, transparent 54%) !important;
           }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(2) button {{
+          [data-testid="stVerticalBlock"]:has(.login-lang-fr-scope) [data-testid="stButton"] > button {{
             background-color: #1b4db3 !important;
             background-image:
               linear-gradient(90deg, #1f4fb2 0 33.333%, #ffffff 33.333% 66.666%, #e43d30 66.666% 100%) !important;
@@ -1083,6 +1089,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1], gap="small", vertical_alignment="center")
     with c1:
+        st.markdown('<span class="login-lang-en-scope"></span>', unsafe_allow_html=True)
         if st.button(
             "EN",
             key=f"{key_prefix}_en",
@@ -1091,6 +1098,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
         ):
             _set_ui_lang("en")
     with c2:
+        st.markdown('<span class="login-lang-fr-scope"></span>', unsafe_allow_html=True)
         if st.button(
             "FR",
             key=f"{key_prefix}_fr",
@@ -1178,7 +1186,7 @@ def _render_header(show_logout=True):
         with st.container():
             st.markdown(
                 f"""
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.2rem;transform:translateY(-2mm);">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4mm;margin-bottom:0.05rem;transform:translateY(-4mm);">
                   {logo_img}
                   <div class="platform-title-login" style="color:white;text-align:center;">
                     {_t("header.title")}
@@ -1202,8 +1210,8 @@ def _view_login():
       [data-testid="stAppViewBlockContainer"],
       section[data-testid="stMain"] .block-container {
         max-width: calc(580px - 20mm) !important;
-        padding: calc(1.8rem - 1cm) 2rem 1.8rem 2rem !important;
-        margin-top: 1cm !important;
+        padding: 0.55rem 2rem 1.8rem 2rem !important;
+        margin-top: 0.35cm !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
