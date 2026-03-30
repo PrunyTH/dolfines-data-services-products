@@ -1014,6 +1014,16 @@ def _render_lang_toggle():
 
 def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     active = _ui_lang()
+    uk_flag = (
+        "url(\"data:image/svg+xml;utf8,"
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 30'>"
+        "<rect width='60' height='30' fill='%23012169'/>"
+        "<path d='M0 0L60 30M60 0L0 30' stroke='%23FFFFFF' stroke-width='6'/>"
+        "<path d='M0 0L60 30M60 0L0 30' stroke='%23C8102E' stroke-width='4'/>"
+        "<path d='M30 0V30M0 15H60' stroke='%23FFFFFF' stroke-width='10'/>"
+        "<path d='M30 0V30M0 15H60' stroke='%23C8102E' stroke-width='6'/>"
+        "</svg>\")"
+    )
     active_selector = (
         '[data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button'
         if active == "en"
@@ -1061,15 +1071,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
 
           [data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button {{
             background-color: #1f3f88 !important;
-            background-image:
-              linear-gradient(90deg, transparent 42%, #ffffff 42%, #ffffff 58%, transparent 58%),
-              linear-gradient(transparent 38%, #ffffff 38%, #ffffff 62%, transparent 62%),
-              linear-gradient(90deg, transparent 46%, #c8102e 46%, #c8102e 54%, transparent 54%),
-              linear-gradient(transparent 44%, #c8102e 44%, #c8102e 56%, transparent 56%),
-              linear-gradient(26deg, transparent 43%, #ffffff 43%, #ffffff 47%, transparent 47%, transparent 53%, #ffffff 53%, #ffffff 57%, transparent 57%),
-              linear-gradient(-26deg, transparent 43%, #ffffff 43%, #ffffff 47%, transparent 47%, transparent 53%, #ffffff 53%, #ffffff 57%, transparent 57%),
-              linear-gradient(26deg, transparent 46%, #c8102e 46%, #c8102e 48.5%, transparent 48.5%, transparent 51.5%, #c8102e 51.5%, #c8102e 54%, transparent 54%),
-              linear-gradient(-26deg, transparent 46%, #c8102e 46%, #c8102e 48.5%, transparent 48.5%, transparent 51.5%, #c8102e 51.5%, #c8102e 54%, transparent 54%) !important;
+            background-image: {uk_flag} !important;
           }}
 
           [data-testid="stVerticalBlock"]:has(.login-lang-fr-scope) [data-testid="stButton"] > button {{
