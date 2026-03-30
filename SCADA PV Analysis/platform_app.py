@@ -990,6 +990,28 @@ def _render_lang_toggle() -> None:
     st.markdown(
         f"""
         <style>
+          .lang-flag {{
+            width: 42px;
+            height: 30px;
+            border-radius: 8px;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: 28px 20px;
+            margin-bottom: -30px;
+            position: relative;
+            z-index: 2;
+            pointer-events: none;
+          }}
+          .lang-flag-en {{
+            border: 1px solid {gb_border};
+            background-color: rgba(255,255,255,0.06);
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><clipPath id='a'><rect width='28' height='20' rx='2'/></clipPath><g clip-path='url(%23a)'><rect width='28' height='20' fill='%23012169'/><path d='M0 0l28 20M28 0L0 20' stroke='%23fff' stroke-width='4'/><path d='M0 0l28 20M28 0L0 20' stroke='%23C8102E' stroke-width='2.2'/><path d='M14 0v20M0 10h28' stroke='%23fff' stroke-width='6'/><path d='M14 0v20M0 10h28' stroke='%23C8102E' stroke-width='4'/></g></svg>");
+          }}
+          .lang-flag-fr {{
+            border: 1px solid {fr_border};
+            background-color: rgba(255,255,255,0.06);
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><rect width='28' height='20' rx='2' fill='%23fff'/><path d='M0 0h9.33v20H0z' fill='%230055A4'/><path d='M18.67 0H28v20h-9.33z' fill='%23EF4135'/></svg>");
+          }}
           .lang-toggle-row div[data-testid="stButton"] > button {{
             min-width: 42px !important;
             width: 42px !important;
@@ -998,18 +1020,9 @@ def _render_lang_toggle() -> None:
             font-size: 0 !important;
             line-height: 0 !important;
             border-radius: 8px !important;
-            background-color: rgba(255,255,255,0.06) !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-size: 28px 20px !important;
-          }}
-          .lang-toggle-row [data-testid="stColumn"]:nth-child(1) div[data-testid="stButton"] > button {{
-            border: 1px solid {gb_border} !important;
-            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><clipPath id='a'><rect width='28' height='20' rx='2'/></clipPath><g clip-path='url(%23a)'><rect width='28' height='20' fill='%23012169'/><path d='M0 0l28 20M28 0L0 20' stroke='%23fff' stroke-width='4'/><path d='M0 0l28 20M28 0L0 20' stroke='%23C8102E' stroke-width='2.2'/><path d='M14 0v20M0 10h28' stroke='%23fff' stroke-width='6'/><path d='M14 0v20M0 10h28' stroke='%23C8102E' stroke-width='4'/></g></svg>") !important;
-          }}
-          .lang-toggle-row [data-testid="stColumn"]:nth-child(2) div[data-testid="stButton"] > button {{
-            border: 1px solid {fr_border} !important;
-            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='20' viewBox='0 0 28 20'><rect width='28' height='20' rx='2' fill='%23fff'/><path d='M0 0h9.33v20H0z' fill='%230055A4'/><path d='M18.67 0H28v20h-9.33z' fill='%23EF4135'/></svg>") !important;
+            background: transparent !important;
+            border: 1px solid transparent !important;
+            color: transparent !important;
           }}
         </style>
         """,
@@ -1018,11 +1031,13 @@ def _render_lang_toggle() -> None:
     st.markdown('<div class="lang-toggle-row"></div>', unsafe_allow_html=True)
     col_en, col_fr = st.columns(2)
     with col_en:
+        st.markdown('<div class="lang-flag lang-flag-en"></div>', unsafe_allow_html=True)
         if st.button(" ", key="lang_en", help="English"):
             if active != "en":
                 st.session_state["ui_lang"] = "en"
                 st.rerun()
     with col_fr:
+        st.markdown('<div class="lang-flag lang-flag-fr"></div>', unsafe_allow_html=True)
         if st.button(" ", key="lang_fr", help="Français"):
             if active != "fr":
                 st.session_state["ui_lang"] = "fr"
