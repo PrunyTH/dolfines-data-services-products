@@ -1028,7 +1028,7 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
           }
 
           [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] button {
-            width: calc(100% - 2mm) !important;
+            width: calc(100% - 1mm) !important;
             min-width: 0 !important;
             min-height: 42px !important;
             height: 42px !important;
