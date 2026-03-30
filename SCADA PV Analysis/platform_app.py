@@ -988,59 +988,18 @@ def _t(key: str, **kwargs) -> str:
 
 def _render_lang_toggle() -> None:
     active = _ui_lang()
-    st.markdown(
-        """
-        <style>
-          .lang-toggle-text {
-            display:flex;
-            justify-content:flex-end;
-            align-items:center;
-            gap:0.25rem;
-            margin-top:0.05rem;
-          }
-          .lang-toggle-text div[data-testid="stButton"] > button {
-            width:auto !important;
-            min-width:0 !important;
-            background:transparent !important;
-            border:none !important;
-            box-shadow:none !important;
-            padding:0 !important;
-            color:rgba(255,255,255,0.78) !important;
-            font-size:0.95rem !important;
-            font-weight:600 !important;
-            letter-spacing:0.02em !important;
-          }
-          .lang-toggle-text .active-lang div[data-testid="stButton"] > button {
-            color:#f39200 !important;
-            font-weight:700 !important;
-          }
-          .lang-toggle-text .sep {
-            color:rgba(255,255,255,0.35);
-            font-size:0.95rem;
-            line-height:1;
-            padding:0 0.05rem;
-          }
-        </style>
-        """,
-        unsafe_allow_html=True,
+    chosen = st.segmented_control(
+        "Language",
+        options=["en", "fr"],
+        default=active,
+        format_func=lambda value: value.upper(),
+        key="ui_lang_segmented",
+        label_visibility="collapsed",
+        width="content",
     )
-    col_en, col_sep, col_fr = st.columns([1, 0.15, 1])
-    with col_en:
-        st.markdown('<div class="lang-toggle-text active-lang">' if active == "en" else '<div class="lang-toggle-text">', unsafe_allow_html=True)
-        if st.button("EN", key="lang_en_text"):
-            if active != "en":
-                st.session_state["ui_lang"] = "en"
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-    with col_sep:
-        st.markdown("<div class='lang-toggle-text'><span class='sep'>|</span></div>", unsafe_allow_html=True)
-    with col_fr:
-        st.markdown('<div class="lang-toggle-text active-lang">' if active == "fr" else '<div class="lang-toggle-text">', unsafe_allow_html=True)
-        if st.button("FR", key="lang_fr_text"):
-            if active != "fr":
-                st.session_state["ui_lang"] = "fr"
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+    if chosen in {"en", "fr"} and chosen != active:
+        st.session_state["ui_lang"] = chosen
+        st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
