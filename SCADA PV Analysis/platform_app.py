@@ -1202,7 +1202,7 @@ def _view_login():
       section[data-testid="stMain"] .block-container {
         max-width: calc(580px - 20mm) !important;
         padding: 0.15rem 2rem calc(1.8rem - 2mm) 2rem !important;
-        margin-top: 2mm !important;
+        margin-top: 0 !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
