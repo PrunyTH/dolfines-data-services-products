@@ -1014,6 +1014,8 @@ def _render_lang_toggle():
 
 def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     active = _ui_lang()
+    en_selector = "[data-testid='stElementContainer']:has(.login-lang-en-scope) + div [data-testid='stButton'] > button"
+    fr_selector = "[data-testid='stElementContainer']:has(.login-lang-fr-scope) + div [data-testid='stButton'] > button"
     uk_flag = (
         "url(\"data:image/svg+xml;utf8,"
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 30'>"
@@ -1024,31 +1026,17 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
         "<path d='M30 0V30M0 15H60' stroke='%23C8102E' stroke-width='6'/>"
         "</svg>\")"
     )
-    active_selector = (
-        '[data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button'
-        if active == "en"
-        else '[data-testid="stVerticalBlock"]:has(.login-lang-fr-scope) [data-testid="stButton"] > button'
-    )
+    active_selector = en_selector if active == "en" else fr_selector
     st.markdown(
         f"""
         <style>
-          .login-lang-scope,
           .login-lang-en-scope,
           .login-lang-fr-scope {{
             display: none !important;
           }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {{
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-          }}
-
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stButton"] {{
-            width: 100% !important;
-          }}
-
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] button {{
+          {en_selector},
+          {fr_selector} {{
             width: calc(100% - 1mm) !important;
             min-width: 0 !important;
             min-height: 42px !important;
@@ -1067,14 +1055,15 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
             box-shadow: inset 0 0 0 999px rgba(8,16,44,0.18) !important;
             background-size: cover !important;
             background-position: center !important;
+            background-repeat: no-repeat !important;
           }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-en-scope) [data-testid="stButton"] > button {{
+          {en_selector} {{
             background-color: #1f3f88 !important;
             background-image: {uk_flag} !important;
           }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-fr-scope) [data-testid="stButton"] > button {{
+          {fr_selector} {{
             background-color: #1b4db3 !important;
             background-image:
               linear-gradient(90deg, #1f4fb2 0 33.333%, #ffffff 33.333% 66.666%, #e43d30 66.666% 100%) !important;
@@ -1089,28 +1078,25 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
         unsafe_allow_html=True,
     )
     with st.container():
-        st.markdown('<span class="login-lang-scope"></span>', unsafe_allow_html=True)
         c1, c2 = st.columns([1, 1], gap="small", vertical_alignment="center")
         with c1:
-            with st.container():
-                st.markdown('<span class="login-lang-en-scope"></span>', unsafe_allow_html=True)
-                if st.button(
-                    "EN",
-                    key=f"{key_prefix}_en",
-                    type="primary" if active == "en" else "secondary",
-                    width="stretch",
-                ):
-                    _set_ui_lang("en")
+            st.markdown('<span class="login-lang-en-scope"></span>', unsafe_allow_html=True)
+            if st.button(
+                "EN",
+                key=f"{key_prefix}_en",
+                type="primary" if active == "en" else "secondary",
+                width="stretch",
+            ):
+                _set_ui_lang("en")
         with c2:
-            with st.container():
-                st.markdown('<span class="login-lang-fr-scope"></span>', unsafe_allow_html=True)
-                if st.button(
-                    "FR",
-                    key=f"{key_prefix}_fr",
-                    type="primary" if active == "fr" else "secondary",
-                    width="stretch",
-                ):
-                    _set_ui_lang("fr")
+            st.markdown('<span class="login-lang-fr-scope"></span>', unsafe_allow_html=True)
+            if st.button(
+                "FR",
+                key=f"{key_prefix}_fr",
+                type="primary" if active == "fr" else "secondary",
+                width="stretch",
+            ):
+                _set_ui_lang("fr")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1215,8 +1201,8 @@ def _view_login():
       [data-testid="stAppViewBlockContainer"],
       section[data-testid="stMain"] .block-container {
         max-width: calc(580px - 20mm) !important;
-        padding: 0.15rem 2rem 1.8rem 2rem !important;
-        margin-top: 0 !important;
+        padding: 0.15rem 2rem calc(1.8rem - 2mm) 2rem !important;
+        margin-top: 2mm !important;
       }
       /* Tighten element gaps and divider on login page only */
       section[data-testid="stMain"] .block-container hr {
