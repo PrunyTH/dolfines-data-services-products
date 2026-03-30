@@ -1022,17 +1022,17 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
     st.markdown(
         f"""
         <style>
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {{
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-          }
+          }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stButton"] {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stButton"] {{
             width: 100% !important;
-          }
+          }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] button {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] button {{
             width: calc(100% - 1mm) !important;
             min-width: 0 !important;
             min-height: 42px !important;
@@ -1051,9 +1051,9 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
             box-shadow: inset 0 0 0 999px rgba(8,16,44,0.18) !important;
             background-size: cover !important;
             background-position: center !important;
-          }
+          }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(1) button {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(1) button {{
             background-color: #1f3f88 !important;
             background-image:
               linear-gradient(90deg, transparent 42%, #ffffff 42%, #ffffff 58%, transparent 58%),
@@ -1064,18 +1064,18 @@ def _render_lang_buttons(key_prefix: str = "lang_inline") -> None:
               linear-gradient(-26deg, transparent 43%, #ffffff 43%, #ffffff 47%, transparent 47%, transparent 53%, #ffffff 53%, #ffffff 57%, transparent 57%),
               linear-gradient(26deg, transparent 46%, #c8102e 46%, #c8102e 48.5%, transparent 48.5%, transparent 51.5%, #c8102e 51.5%, #c8102e 54%, transparent 54%),
               linear-gradient(-26deg, transparent 46%, #c8102e 46%, #c8102e 48.5%, transparent 48.5%, transparent 51.5%, #c8102e 51.5%, #c8102e 54%, transparent 54%) !important;
-          }
+          }}
 
-          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(2) button {
+          [data-testid="stVerticalBlock"]:has(.login-lang-scope) [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:nth-child(2) button {{
             background-color: #1b4db3 !important;
             background-image:
               linear-gradient(90deg, #1f4fb2 0 33.333%, #ffffff 33.333% 66.666%, #e43d30 66.666% 100%) !important;
-          }
+          }}
 
-          {active_selector} {
+          {active_selector} {{
             border: 1px solid rgba(243,146,0,0.95) !important;
             box-shadow: 0 0 0 1px rgba(243,146,0,0.35), inset 0 0 0 999px rgba(8,16,44,0.08) !important;
-          }
+          }}
         </style>
         """,
         unsafe_allow_html=True,
